@@ -1,0 +1,26 @@
+GUIA RÁPIDO - IMAGEM BASE ODS
+=============================
+
+1. RECONSTRUIR O ARQUIVO ORIGINAL
+
+cat imagem-base-v1.tar.zst.part-* > imagem-base-v1.tar.zst
+
+
+2. VERIFICAR INTEGRIDADE DAS PARTES
+
+sha256sum -c partes.sha256
+
+
+3. VERIFICAR INTEGRIDADE DO ARQUIVO RECONSTRUÍDO
+
+sha256sum -c imagem-base-v1.sha256
+
+
+RESULTADO ESPERADO:
+
+imagem-base-v1.tar.zst: OK
+
+
+OBSERVAÇÕES:
+- Manter todas as partes no mesmo diretório.
+- Manter os arquivos SHA-256 para verificar a integridade.
