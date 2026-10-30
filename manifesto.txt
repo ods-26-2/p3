@@ -1,0 +1,170 @@
+== DATA ==
+sex 30 out 2026 13:57:58 -03
+== L4T ==
+# R36 (release), REVISION: 4.7, GCID: 42132812, BOARD: generic, EABI: aarch64, DATE: Thu Sep 18 22:54:44 UTC 2025
+# KERNEL_VARIANT: oot
+TARGET_USERSPACE_LIB_DIR=nvidia
+TARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia
+== JETPACK ==
+nvidia-jetpack	6.2.1+b38
+== CUDA ==
+Cuda compilation tools, release 12.6, V12.6.68
+Build cuda_12.6.r12.6/compiler.34714021_0
+== KERNEL ==
+Linux ods-pc 5.15.148-tegra #1 SMP PREEMPT Thu Jul 3 08:03:36 UTC 2025 aarch64 aarch64 aarch64 GNU/Linux
+== PACOTES TRAVADOS ==
+cuda-cccl-12-6
+cuda-command-line-tools-12-6
+cuda-compiler-12-6
+cuda-crt-12-6
+cuda-cudart-12-6
+cuda-cudart-dev-12-6
+cuda-cuobjdump-12-6
+cuda-cupti-12-6
+cuda-cupti-dev-12-6
+cuda-cuxxfilt-12-6
+cuda-documentation-12-6
+cuda-driver-dev-12-6
+cuda-gdb-12-6
+cuda-libraries-12-6
+cuda-libraries-dev-12-6
+cuda-nsight-compute-12-6
+cuda-nvcc-12-6
+cuda-nvdisasm-12-6
+cuda-nvml-dev-12-6
+cuda-nvprune-12-6
+cuda-nvrtc-12-6
+cuda-nvrtc-dev-12-6
+cuda-nvtx-12-6
+cuda-nvvm-12-6
+cuda-profiler-api-12-6
+cuda-runtime-12-6
+cuda-sanitizer-12-6
+cuda-toolkit-12-6
+cuda-toolkit-12-6-config-common
+cuda-toolkit-12-config-common
+cuda-toolkit-config-common
+cuda-tools-12-6
+cuda-visual-tools-12-6
+docker-ce
+libcudnn9-cuda-12
+libcudnn9-dev-cuda-12
+libcudnn9-samples
+libnvinfer-bin
+libnvinfer-dev
+libnvinfer-dispatch-dev
+libnvinfer-dispatch10
+libnvinfer-headers-dev
+libnvinfer-headers-plugin-dev
+libnvinfer-lean-dev
+libnvinfer-lean10
+libnvinfer-plugin-dev
+libnvinfer-plugin10
+libnvinfer-samples
+libnvinfer-vc-plugin-dev
+libnvinfer-vc-plugin10
+libnvinfer10
+libnvonnxparsers-dev
+libnvonnxparsers10
+nvidia-jetpack
+nvidia-jetpack-dev
+nvidia-jetpack-runtime
+nvidia-l4t-3d-core
+nvidia-l4t-apt-source
+nvidia-l4t-bootloader
+nvidia-l4t-camera
+nvidia-l4t-configs
+nvidia-l4t-core
+nvidia-l4t-cuda
+nvidia-l4t-cuda-utils
+nvidia-l4t-cudadebuggingsupport
+nvidia-l4t-display-kernel
+nvidia-l4t-dla-compiler
+nvidia-l4t-firmware
+nvidia-l4t-gbm
+nvidia-l4t-graphics-demos
+nvidia-l4t-gstreamer
+nvidia-l4t-init
+nvidia-l4t-initrd
+nvidia-l4t-jetson-io
+nvidia-l4t-jetson-multimedia-api
+nvidia-l4t-jetsonpower-gui-tools
+nvidia-l4t-kernel
+nvidia-l4t-kernel-dtbs
+nvidia-l4t-kernel-headers
+nvidia-l4t-kernel-oot-headers
+nvidia-l4t-kernel-oot-modules
+nvidia-l4t-libwayland-client0
+nvidia-l4t-libwayland-cursor0
+nvidia-l4t-libwayland-egl1
+nvidia-l4t-libwayland-server0
+nvidia-l4t-multimedia
+nvidia-l4t-multimedia-utils
+nvidia-l4t-nvfancontrol
+nvidia-l4t-nvml
+nvidia-l4t-nvpmodel
+nvidia-l4t-nvpmodel-gui-tools
+nvidia-l4t-nvsci
+nvidia-l4t-oem-config
+nvidia-l4t-openwfd
+nvidia-l4t-optee
+nvidia-l4t-pva
+nvidia-l4t-tools
+nvidia-l4t-vulkan-sc
+nvidia-l4t-vulkan-sc-dev
+nvidia-l4t-vulkan-sc-samples
+nvidia-l4t-vulkan-sc-sdk
+nvidia-l4t-wayland
+nvidia-l4t-weston
+nvidia-l4t-x11
+nvidia-l4t-xusb-firmware
+python3-libnvinfer
+python3-libnvinfer-dev
+python3-libnvinfer-dispatch
+python3-libnvinfer-lean
+tensorrt
+tensorrt-libs
+vpi3-dev
+vpi3-python-src
+vpi3-samples
+== DOCKER ==
+Docker version 29.1.3, build 29.1.3-0ubuntu3~22.04.2
+IMAGE   ID             DISK USAGE   CONTENT SIZE   EXTRA
+== DISCOS ==
+NAME         MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+loop0          7:0    0     4K  1 loop /snap/bare/5
+loop1          7:1    0  61,8M  1 loop /snap/core24/2125
+loop2          7:2    0 552,9M  1 loop /snap/gnome-46-2404/154
+loop3          7:3    0   562M  1 loop /snap/gnome-46-2404/176
+loop4          7:4    0  91,7M  1 loop /snap/gtk-common-themes/1535
+loop5          7:5    0 188,2M  1 loop /snap/mesa-2404/1836
+loop6          7:6    0  43,5M  1 loop /snap/snapd/27740
+loop7          7:7    0  38,6M  1 loop /snap/snapd/28255
+loop8          7:8    0    16M  1 loop 
+mmcblk0      179:0    0  59,5G  0 disk 
+├─mmcblk0p1  179:1    0    58G  0 part /
+├─mmcblk0p2  179:2    0   128M  0 part 
+├─mmcblk0p3  179:3    0   768K  0 part 
+├─mmcblk0p4  179:4    0  31,6M  0 part 
+├─mmcblk0p5  179:5    0   128M  0 part 
+├─mmcblk0p6  179:6    0   768K  0 part 
+├─mmcblk0p7  179:7    0  31,6M  0 part 
+├─mmcblk0p8  179:8    0    80M  0 part 
+├─mmcblk0p9  179:9    0   512K  0 part 
+├─mmcblk0p10 179:10   0    64M  0 part /boot/efi
+├─mmcblk0p11 179:11   0    80M  0 part 
+├─mmcblk0p12 179:12   0   512K  0 part 
+├─mmcblk0p13 179:13   0    64M  0 part 
+├─mmcblk0p14 179:14   0   400M  0 part 
+└─mmcblk0p15 179:15   0 479,5M  0 part 
+zram0        252:0    0   635M  0 disk [SWAP]
+zram1        252:1    0   635M  0 disk [SWAP]
+zram2        252:2    0   635M  0 disk [SWAP]
+zram3        252:3    0   635M  0 disk [SWAP]
+zram4        252:4    0   635M  0 disk [SWAP]
+zram5        252:5    0   635M  0 disk [SWAP]
+== ESPACO ==
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/mmcblk0p1   57G   35G   19G  65% /
+== NAO INCLUI ==
+/home, /tmp, /var/tmp
