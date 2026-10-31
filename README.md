@@ -53,6 +53,6 @@ imagem-base-v1.tar.zst: OK
 
 ## Observações
 
-Esta imagem representa uma cópia do sistema de arquivos raiz do equipamento de origem, gerada via SSH e compactada utilizando zstd.
+Esta imagem representa uma cópia do sistema de arquivos raiz do equipamento de origem( por enquanto não disponibilizada devido seu tamanho), gerada via SSH e compactada utilizando zstd.
 
 O arquivo foi produzido para servir como imagem base do ambiente ODS, preservando o estado do sistema e as informações necessárias para sua identificação e reprodução.
