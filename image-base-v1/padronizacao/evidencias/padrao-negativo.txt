@@ -1,0 +1,13 @@
+OK    PADRAO-NOMES.md com 7 regras
+OK    ods/base-gpu:0.1.0-jp6.2.1-b003 (formato da tag)
+OK    ods/base-gpu:0.1.0-jp6.2.1-b002 (formato da tag)
+OK    ods/falso:0.0.1-jp6.2.1-b001 (formato da tag)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.servico ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.versao ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.build ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.jetpack ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.l4t ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.commit ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.fonte ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.data ausente)
+FALHA ods/falso:0.0.1-jp6.2.1-b001 (label ods.base ausente)

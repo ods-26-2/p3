@@ -1,0 +1,4 @@
+ERRO: base com :latest (ubuntu:latest)
+saida=1
+ERRO: versao deve ser X.Y.Z
+saida=1
