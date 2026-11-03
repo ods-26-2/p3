@@ -1,0 +1,6 @@
+seg 02 nov 2026 22:59:52 -03
+{"io.buildah.version":"1.23.1","maintainer":"NVIDIA CORPORATION <cudatools@nvidia.com>","ods.base":"nvcr.io/nvidia/l4t-cuda:12.6.11-runtime@sha256:49853e9fe2a0305efa51fcbb3426eea1bca658085f2d26bb40347711434849b1","ods.build":"b001","ods.commit":"sem-git","ods.data":"2026-11-02T23:22:37Z","ods.jetpack":"6.2.1","ods.l4t":"36.4.7","ods.servico":"base-gpu","ods.versao":"0.1.0","org.opencontainers.image.ref.name":"ubuntu","org.opencontainers.image.version":"22.04"}
+GPUs CUDA detectadas: 1
+GPU: Orin
+Resultado calculado na GPU: 42
+TESTE CUDA: PASSOU
