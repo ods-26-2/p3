@@ -1,4 +1,4 @@
-# Projeto P3 — Ambiente ODS (Jetson Linux)
+# P3 — Ambiente ODS (Jetson Linux)
 
 Este repositório centraliza os artefatos, scripts de automação, documentações de auditoria e políticas de gerenciamento da plataforma base baseada no ecossistema NVIDIA Jetson (JetPack 6.2.1 / L4T R36.4.7).
 
