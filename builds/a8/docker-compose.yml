@@ -1,0 +1,120 @@
+# ODS — build mínima do A8 · Estacionamento (VER-5)
+# Montada a partir do código atual dos repositórios, não só do plano 6c.
+#
+# O backend do A8 hoje consome um único tópico: ods.i7.plate_read.
+# Por isso o mínimo é:
+#   kafka       barramento (B3 define, P3 sobe)
+#   a8-mysql    banco do A8
+#   a8-backend  API, consome ods.i7.plate_read
+#   a8-frontend interface (Expo)
+#   i7          leitura de placas; hoje processa uma pasta de imagens e publica no Kafka
+#
+# Sem CI: as imagens são construídas na própria Jetson, a partir dos clones em SRC_DIR,
+# no commit fixado em a8.env (rode ./preparar-codigo.sh antes).
+#
+# Uso:
+#   ./preparar-codigo.sh
+#   docker compose --env-file a8.env --env-file a8.secrets.env build
+#   docker compose --env-file a8.env --env-file a8.secrets.env up -d
+#   docker compose --env-file a8.env --env-file a8.secrets.env run --rm i7     # processa as imagens
+
+name: ods-a8
+
+services:
+
+  kafka:
+    image: ${KAFKA_IMAGE:?defina KAFKA_IMAGE}
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 5s
+      retries: 30
+
+  a8-mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: a8
+      MYSQL_ROOT_PASSWORD: ${A8_DB_PASSWORD:?defina A8_DB_PASSWORD em a8.secrets.env}
+    volumes:
+      - a8-mysql:/var/lib/mysql
+      - ${SRC_DIR:?defina SRC_DIR}/a8/database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  a8-backend:
+    build: ${SRC_DIR}/a8/backend
+    image: ods-a8-backend:${A8_REF:?fixe o commit do a8}
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DB_HOST: a8-mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${A8_DB_PASSWORD}
+      DB_NAME: a8
+      JWT_SECRET: ${A8_JWT_SECRET:?defina A8_JWT_SECRET em a8.secrets.env}
+      JWT_EXPIRES_IN: 7d
+      KAFKA_ATIVO: "true"
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPICO: ods.i7.plate_read
+      KAFKA_GROUP_ID: A8-acesso
+      KAFKA_DESDE_O_INICIO: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      a8-mysql: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+
+  a8-frontend:
+    build: ${SRC_DIR}/a8/frontend
+    image: ods-a8-frontend:${A8_REF}
+    restart: unless-stopped
+    environment:
+      EXPO_PUBLIC_API_URL: http://${JETSON_IP:?defina JETSON_IP}:3000
+    ports:
+      - "8081:8081"
+    depends_on: [a8-backend]
+
+  i7:
+    # Processamento sob demanda: não sobe com "up"; rode com "run --rm i7".
+    build: ${SRC_DIR}/i7
+    image: ods-i7:${I7_REF:?fixe o commit do i7}
+    profiles: [i7]
+    restart: "no"
+    environment:
+      PUBLICACAO_MODO: kafka
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPICO: ods.i7.plate_read
+      SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
+      PASTA_IMAGENS: /dados/imagens
+      PASTA_SAIDA: /dados/saidas
+      OCR_MODELO: cct-s-v2-global-model
+    volumes:
+      - ${I7_IMAGENS_DIR:?defina I7_IMAGENS_DIR}:/dados/imagens:ro
+      - i7-saidas:/dados/saidas
+      - i7-cache:/root/.cache
+    depends_on:
+      kafka: { condition: service_healthy }
+
+volumes:
+  a8-mysql: {}
+  i7-saidas: {}
+  i7-cache: {}
