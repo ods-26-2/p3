@@ -31,9 +31,20 @@ p3/
 ├── orçamento_de_memoria_e_GPU/        # Monitoramento, dimensionamento e limites de hardware
 │   ├── Orçamento de memória e GPU...pdf# Documento com a alocação teórica e limites de RAM/VRAM
 │   └── tegra-teste.log                # Log amostral de telemetria coletado via tegrastats
-└── política_de_armazenamento/         # Governança de disco e alertas de escassez
-    ├── alerta_disco.sh                # Script de monitoramento contínuo do uso de partições
-    └── Política de armazenamento...pdf # Diretrizes de retenção de logs e limites de partições
+├── política_de_armazenamento/         # Governança de disco e alertas de escassez
+│   ├── alerta_disco.sh                # Script de monitoramento contínuo do uso de partições
+│   └── Política de armazenamento...pdf # Diretrizes de retenção de logs e limites de partições
+└── validacao/                         # Central de homologação de sistemas e aplicações na Jetson
+    ├── README.md                      # Diretrizes gerais, critérios do SO e status das homologações
+    ├── validacao-geral/               # Validação de infraestrutura e hardware global
+    │   ├── evidencias/                # Logs e saídas da validação de hardware global
+    │   └── validar-hardware.sh        # Script que checa arquitetura, GPU, CUDA, JetPack e memória
+    └── a8/                            # Validação específica da aplicação A8 (modelo para novas aplicações)
+        ├── README.md                  # Escopo do teste e instruções de execução da aplicação A8
+        ├── RELATORIO-VALIDACAO.md     # Critérios de aceitação, testes realizados e parecer final
+        ├── validar-a8-fluxo.sh        # Script automatizado do fluxo ponta a ponta da API da aplicação
+        └── evidencias/                # Logs gerados pelo script com data na nomenclatura
+
 ```
 
 ---
