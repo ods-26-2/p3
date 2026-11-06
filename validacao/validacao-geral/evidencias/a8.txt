@@ -1,0 +1,25 @@
+========================================
+ VALIDACAO HARDWARE NVIDIA JETSON
+========================================
+[OK]    Arquitetura ARM64
+[OK]    Sistema NVIDIA L4T identificado
+# R36 (release), REVISION: 4.7, GCID: 42132812, BOARD: generic, EABI: aarch64, DATE: Thu Sep 18 22:54:44 UTC 2025
+# KERNEL_VARIANT: oot
+TARGET_USERSPACE_LIB_DIR=nvidia
+TARGET_USERSPACE_LIB_DIR_PATH=usr/lib/aarch64-linux-gnu/nvidia
+[OK]    Modelo: NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super
+[OK]    Dispositivo GPU encontrado
+Build cuda_12.6.r12.6/compiler.34714021_0
+[OK]    Compilador CUDA encontrado
+               total        used        free      shared  buff/cache   available
+Mem:           7,4Gi       2,7Gi       305Mi        86Mi       4,5Gi       4,5Gi
+Swap:          3,7Gi       668Mi       3,1Gi
+[OK]    Memoria consultada
+[OK]    tegrastats disponivel
+[OK]    Container em execucao
+[OK]    Container ARM64
+[AVISO] GPU nao visivel dentro do container
+[AVISO] CUDA Runtime nao localizado pelo ldconfig
+[AVISO] TensorRT nao localizado pelo ldconfig
+========================================
+RESULTADO: VALIDACAO APROVADA
