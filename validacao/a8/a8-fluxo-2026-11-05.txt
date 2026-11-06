@@ -1,0 +1,44 @@
+== A8 fluxo qui 05 nov 2026 20:44:14 -03 ==
+OK    cadastra empresa (http 201)
+FALHA empresa faz login (esperado 200, veio 500) {"erro":"Erro interno no servidor"}
+FALHA sem token da empresa
+FALHA empresa cadastra usuario (esperado 201, veio 401) {"erro":"Você precisa estar autenticado."}
+FALHA cadastra veiculo convidado (esperado 201, veio 401) {"erro":"Você precisa estar autenticado."}
+FALHA veiculo nao esta no banco (count=0)
+FALHA usuario faz login (esperado 200, veio 401) {"erro":"Email ou senha inválidos"}
+FALHA usuario lista suas empresas (esperado 200, veio 401) {"erro":"Você precisa estar autenticado."}
+OK    dados de teste removidos
+RESULTADO: 7 falha(s)
+== A8 fluxo qui 05 nov 2026 20:54:18 -03 ==
+OK    cadastra empresa (http 201)
+OK    empresa faz login (http 200)
+OK    token da empresa recebido
+OK    empresa cadastra usuario (http 201)
+OK    cadastra veiculo convidado (http 201)
+OK    veiculo convidado gravado no banco
+OK    usuario faz login (http 200)
+OK    usuario lista suas empresas (http 200)
+OK    dados de teste removidos
+RESULTADO: FUNCIONA (fluxo completo)
+== A8 fluxo qui 05 nov 2026 22:32:09 -03 ==
+OK    cadastra empresa (http 201)
+OK    empresa faz login (http 200)
+OK    token da empresa recebido
+OK    empresa cadastra usuario (http 201)
+OK    cadastra veiculo convidado (http 201)
+OK    veiculo convidado gravado no banco
+OK    usuario faz login (http 200)
+OK    usuario lista suas empresas (http 200)
+OK    dados de teste removidos
+RESULTADO: FUNCIONA (fluxo completo)
+== A8 fluxo qui 05 nov 2026 22:46:10 -03 ==
+OK    cadastra empresa (http 201)
+OK    empresa faz login (http 200)
+OK    token da empresa recebido
+OK    empresa cadastra usuario (http 201)
+OK    cadastra veiculo convidado (http 201)
+OK    veiculo convidado gravado no banco
+OK    usuario faz login (http 200)
+OK    usuario lista suas empresas (http 200)
+OK    dados de teste removidos
+RESULTADO: FUNCIONA (fluxo completo)
