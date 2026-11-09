@@ -6,7 +6,7 @@ CNPJ="99000000000001"; EEMP="zz-empresa@teste.invalid"; EUSR="zz-usuario@teste.i
 CPF="99999999999"; SENHA="Teste12345"; TMP=$(mktemp); falhas=0
 mkdir -p "$(dirname "$SAIDA")"
 log() { echo "$*" | tee -a "$SAIDA"; }
-sql() { echo "$1" | docker exec -i a8-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -D a8' 2>/dev/null; }
+sql() { echo "$1" | docker exec -i "${DB_CONTAINER:-a8-mysql}" sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -D a8' 2>/dev/null; }
 limpar() { sql "DELETE FROM Usuario WHERE email='$EUSR'; DELETE FROM Empresa WHERE CNPJ='$CNPJ';" >/dev/null; }
 req() { # nome esperado metodo caminho json [token]
   local h=(-H "Content-Type: application/json"); [ -n "$6" ] && h+=(-H "Authorization: Bearer $6")
