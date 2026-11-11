@@ -5,9 +5,9 @@
 # O Kafka NÃO faz parte desta build: o Guia de Uso do Kafka (TRA-1) proíbe broker
 # paralelo e manda todos usarem o barramento compartilhado (container "kafka" da Jetson).
 #
-# Esse Kafka anuncia a porta 9092 como "kafka:9092". Para o nome "kafka" funcionar
-# aqui dentro, a8-backend e i7 mapeiam kafka -> host-gateway (a própria Jetson),
-# onde a porta 9092 do Kafka compartilhado está publicada.
+# A build usa o listener PRIVATE desse Kafka (porta 9093), que anuncia o IP da
+# Jetson na rede do laboratório e por isso funciona de dentro de containers.
+# A porta 9092 (INTERNAL) anuncia localhost e só serve fora de containers.
 #
 # Por isso o mínimo é:
 #   a8-mysql    banco do A8
@@ -47,8 +47,6 @@ services:
     build: ${SRC_DIR}/a8/backend
     image: ods-a8-backend:${A8_REF:?fixe o commit do a8}
     restart: unless-stopped
-    extra_hosts:
-      - "kafka:host-gateway"
     environment:
       PORT: 3000
       DB_HOST: a8-mysql
@@ -84,8 +82,6 @@ services:
     image: ods-i7:${I7_REF:?fixe o commit do i7}
     profiles: [i7]
     restart: "no"
-    extra_hosts:
-      - "kafka:host-gateway"
     environment:
       PUBLICACAO_MODO: kafka
       KAFKA_BROKER: ${KAFKA_BROKER:?defina KAFKA_BROKER}
