@@ -2,8 +2,14 @@
 # Montada a partir do código atual dos repositórios, não só do plano 6c.
 #
 # O backend do A8 hoje consome um único tópico: ods.i7.plate_read.
+# O Kafka NÃO faz parte desta build: o Guia de Uso do Kafka (TRA-1) proíbe broker
+# paralelo e manda todos usarem o barramento compartilhado (container "kafka" da Jetson).
+#
+# Esse Kafka anuncia a porta 9092 como "kafka:9092". Para o nome "kafka" funcionar
+# aqui dentro, a8-backend e i7 mapeiam kafka -> host-gateway (a própria Jetson),
+# onde a porta 9092 do Kafka compartilhado está publicada.
+#
 # Por isso o mínimo é:
-#   kafka       barramento (B3 define, P3 sobe)
 #   a8-mysql    banco do A8
 #   a8-backend  API, consome ods.i7.plate_read
 #   a8-frontend interface (Expo)
@@ -21,28 +27,6 @@
 name: ods-a8
 
 services:
-
-  kafka:
-    image: ${KAFKA_IMAGE:?defina KAFKA_IMAGE}
-    restart: unless-stopped
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_HEAP_OPTS: "-Xmx512m -Xms512m"
-    healthcheck:
-      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 5s
-      retries: 30
 
   a8-mysql:
     image: mysql:8.4
@@ -63,6 +47,8 @@ services:
     build: ${SRC_DIR}/a8/backend
     image: ods-a8-backend:${A8_REF:?fixe o commit do a8}
     restart: unless-stopped
+    extra_hosts:
+      - "kafka:host-gateway"
     environment:
       PORT: 3000
       DB_HOST: a8-mysql
@@ -73,7 +59,7 @@ services:
       JWT_SECRET: ${A8_JWT_SECRET:?defina A8_JWT_SECRET em a8.secrets.env}
       JWT_EXPIRES_IN: 7d
       KAFKA_ATIVO: "true"
-      KAFKA_BROKER: kafka:9092
+      KAFKA_BROKER: ${KAFKA_BROKER:?defina KAFKA_BROKER}
       KAFKA_TOPICO: ods.i7.plate_read
       KAFKA_GROUP_ID: A8-acesso
       KAFKA_DESDE_O_INICIO: "false"
@@ -81,7 +67,6 @@ services:
       - "3000:3000"
     depends_on:
       a8-mysql: { condition: service_healthy }
-      kafka: { condition: service_healthy }
 
   a8-frontend:
     build: ${SRC_DIR}/a8/frontend
@@ -99,9 +84,11 @@ services:
     image: ods-i7:${I7_REF:?fixe o commit do i7}
     profiles: [i7]
     restart: "no"
+    extra_hosts:
+      - "kafka:host-gateway"
     environment:
       PUBLICACAO_MODO: kafka
-      KAFKA_BROKER: kafka:9092
+      KAFKA_BROKER: ${KAFKA_BROKER:?defina KAFKA_BROKER}
       KAFKA_TOPICO: ods.i7.plate_read
       SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
       PASTA_IMAGENS: /dados/imagens
@@ -111,8 +98,6 @@ services:
       - ${I7_IMAGENS_DIR:?defina I7_IMAGENS_DIR}:/dados/imagens:ro
       - i7-saidas:/dados/saidas
       - i7-cache:/root/.cache
-    depends_on:
-      kafka: { condition: service_healthy }
 
 volumes:
   a8-mysql: {}
