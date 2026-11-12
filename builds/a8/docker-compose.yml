@@ -167,11 +167,12 @@ services:
     ipc: "service:p4"
     environment:
       ODS_KAFKA_BROKER: ${KAFKA_BROKER}
-    # PROVISÓRIO: o run_detector.py (30df178) usa os.getenv sem "import os" e cai com
-    # NameError. O prefixo abaixo deixa "os" disponível sem alterar o código da MOD-1.
+    # PROVISÓRIO: o run_detector.py (30df178) usa "os" e "BROKER_ENV_VAR" sem importá-los
+    # e cai com NameError (pyflakes não acusa outros nomes). O prefixo abaixo deixa os dois
+    # disponíveis sem alterar o código da MOD-1.
     # Quando corrigirem, volte para: ["python3", "I1/run_detector.py", <mesmos argumentos>]
     command: ["python3", "-c",
-              "import builtins, os, runpy, sys; builtins.os = os; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
+              "import builtins, os, runpy, sys; from detector.config import BROKER_ENV_VAR; builtins.os = os; builtins.BROKER_ENV_VAR = BROKER_ENV_VAR; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
               "--backend", "ultralytics",
               "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
               "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
