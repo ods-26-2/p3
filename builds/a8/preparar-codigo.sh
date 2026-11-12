@@ -6,7 +6,11 @@ cd "$(dirname "$0")"
 
 set -a; source ./a8.env; set +a
 
-declare -A REFS=( [a8]="$A8_REF" [i7]="$I7_REF" )
+declare -A REFS=(
+  [a8]="$A8_REF" [i7]="$I7_REF"
+  [p4]="$P4_REF" [i1]="$I1_REF" [i2]="$I2_REF" [i3]="$I3_REF"
+  [s1]="$S1_REF" [s4]="$S4_REF" [s5]="$S5_REF"
+)
 
 mkdir -p "$SRC_DIR"
 for repo in "${!REFS[@]}"; do
