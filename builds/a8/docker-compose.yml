@@ -167,7 +167,12 @@ services:
     ipc: "service:p4"
     environment:
       ODS_KAFKA_BROKER: ${KAFKA_BROKER}
-    command: ["python3", "I1/run_detector.py", "--backend", "ultralytics",
+    # PROVISÓRIO: o run_detector.py (30df178) usa os.getenv sem "import os" e cai com
+    # NameError. O prefixo abaixo deixa "os" disponível sem alterar o código da MOD-1.
+    # Quando corrigirem, volte para: ["python3", "I1/run_detector.py", <mesmos argumentos>]
+    command: ["python3", "-c",
+              "import builtins, os, runpy, sys; builtins.os = os; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
+              "--backend", "ultralytics",
               "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
               "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
     volumes:
@@ -215,6 +220,9 @@ services:
       target: production
     image: ods-s4:${S4_REF:?fixe o commit do s4}
     restart: unless-stopped
+    # Teto de mídia: sem ele, o S4 só expurga com o disco da placa em 85%.
+    command: ["/app/s4_media_evidence", "--port", "18084", "--db", "/data/s4.db",
+              "--media-dir", "/data/media", "--media-quota-bytes", "${S4_MEDIA_QUOTA_BYTES:-1073741824}"]
     environment:
       ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
       ODS_S4_KAFKA_GROUP_ID: s4-media-evidence
