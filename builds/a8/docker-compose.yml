@@ -114,9 +114,10 @@ services:
       - >
         for t in ods.session.started ods.p4.frame ods.i1.detections ods.i2.tracks
         ods.i3.calibration ods.artifact.published ods.s1.position ods.s1.zone_transition
-        ods.s1.zone_occupancy ods.s2.event ods.s2.entity ods.s4.clip ods.s4.capture.command
-        ods.s4.capture.reply ods.s4.clip.query ods.s4.clip.query.reply ods.s5.zone_metrics
-        ods.s5.event_metrics ods.s5.metrics.query ods.s5.metrics.reply ods.s5.heatmap.query; do
+        ods.s1.zone_occupancy ods.s2.event ods.s2.entity ods.s2.rules.command ods.s2.rules.reply
+        ods.s4.clip ods.s4.capture.command ods.s4.capture.reply ods.s4.clip.query
+        ods.s4.clip.reply ods.s4.clip.query.reply ods.s5.zone_metrics ods.s5.event_metrics
+        ods.s5.metrics.query ods.s5.metrics.reply ods.s5.heatmap.query ods.s5.heatmap.reply; do
         kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
         --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
 
@@ -255,6 +256,30 @@ services:
       - "127.0.0.1:8000:8000"
     depends_on:
       kafka-topicos: { condition: service_completed_successfully }
+
+  aceite:
+    # Teste de aceitação do A8 ("A8 simulado"). Sob demanda: ./a8.sh testar
+    build:
+      context: ./aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1
+    image: ods-aceite-a8:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      S4_HTTP: http://s4:18084
+      VIDEO_SOURCE_ID: file_cam0
+      ZONAS: vaga-1,vaga-2
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+    command: ["python", "-u", "/aceite/aceite_a8.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
 
 volumes:
   a8-mysql: {}
