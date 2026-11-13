@@ -36,7 +36,7 @@ dc() { docker compose --env-file a8.env --env-file a8.secrets.env "$@"; }
 
 declare -A IMG=(
   [a8-backend]="ods-a8-backend:$A8_REF" [a8-frontend]="ods-a8-frontend:$A8_REF" [i7]="ods-i7:$I7_REF"
-  [p4]="ods-p4:$P4_REF" [i1]="ods-i1:$I1_REF" [i2]="ods-i2:$I2_REF" [i3]="ods-i3:$I3_REF"
+  [p4]="ods-p4:$P4_REF" [i1]="ods-i1-gpu:$I1_REF" [i2]="ods-i2:$I2_REF" [i3]="ods-i3:$I3_REF"
   [s1]="ods-s1:$S1_REF" [s4]="ods-s4:$S4_REF" [s5]="ods-s5:$S5_REF" [aceite]="ods-aceite-a8:1"
 )
 # Ordem de construção: a que deixa mais cache primeiro, as maiores por último, sozinhas.
@@ -116,8 +116,28 @@ checar_pastas() {
     if mkdir -p "$I7_IMAGENS_DIR" 2>/dev/null; then ok "pasta criada: $I7_IMAGENS_DIR"
     else aviso "não consegui criar $I7_IMAGENS_DIR. Uma vez só: sudo mkdir -p $I7_IMAGENS_DIR && sudo chown $(id -un) $I7_IMAGENS_DIR"; fi
   fi
+  # Engines TensorRT do I1: criada aqui pelo mesmo motivo (o i1-engine grava nela).
+  if [[ ! -d "$I1_ENGINES_DIR" ]]; then
+    if mkdir -p "$I1_ENGINES_DIR" 2>/dev/null; then ok "pasta criada: $I1_ENGINES_DIR"
+    else aviso "não consegui criar $I1_ENGINES_DIR. Uma vez só: sudo mkdir -p $I1_ENGINES_DIR && sudo chown $(id -un) $I1_ENGINES_DIR"; fi
+  fi
   [[ -d "$VIDEO_DIR" ]] || aviso "a pasta $VIDEO_DIR não existe: P4, S4 e o I7 em modo vídeo ficam sem entrada"
   return 0
+}
+
+# O I1 roda na GPU: o Docker precisa do runtime "nvidia" (nvidia-container-toolkit do JetPack).
+checar_gpu() {
+  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"' \
+    || erro "o Docker desta placa não tem o runtime nvidia; o I1 (TensorRT) não sobe sem ele.
+  Confira com: docker info | grep -i runtime"
+  ok "Docker com runtime nvidia (GPU para o I1)"
+}
+
+# Engine TensorRT do I1: compila na primeira vez (minutos); depois só confere (segundos).
+preparar_engine_i1() {
+  etapa "Engine TensorRT do I1 ($I1_PACOTE em $I1_ENGINES_DIR)"
+  dc --profile video run --rm i1-engine || erro "a engine do I1 não ficou pronta; veja a saída acima"
+  checar_disco
 }
 
 # O I7 lê quadros extraídos do vídeo (serviço i7-video; usa a imagem do i7, que precisa existir).
@@ -232,6 +252,7 @@ subir() {
   garantir_segredos
   checar_disco
   checar_kafka
+  checar_gpu
   checar_pastas
   checar_entradas
 
@@ -239,6 +260,7 @@ subir() {
   ./preparar-codigo.sh
 
   construir "$reconstruir"
+  preparar_engine_i1
 
   etapa "Subindo"
   dc up -d --remove-orphans

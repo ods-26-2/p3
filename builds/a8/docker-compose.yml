@@ -16,7 +16,8 @@
 #   i7          leitura de placas; hoje processa uma pasta de imagens e publica no Kafka
 #
 # Cadeia completa do plano 6c (versão base, ver a parte "cadeia" no fim do arquivo):
-#   p4 (vídeo) -> i1 (detecção) -> i2 (rastreio) -> s1 (zonas) -> s5 (métricas)
+#   p4 (vídeo) -> i1 (detecção, GPU/TensorRT) -> i2 (rastreio) -> s1 (zonas) -> s5 (métricas)
+#   i1-engine (one-shot): compila a engine TensorRT do I1 na primeira vez
 #   s4 (evidência de mídia), i3 (calibração, sob demanda)
 #   Fica de fora: S2, que ainda não conversa com o Kafka (lê e grava arquivos JSON).
 #
@@ -192,28 +193,61 @@ services:
       s1: { condition: service_started }
       s4: { condition: service_started }
       s5: { condition: service_started }
+      # O P4 toca o vídeo uma vez só: espera a engine do I1 existir para não perder quadros
+      # enquanto ela compila (minutos na primeira vez).
+      i1-engine: { condition: service_completed_successfully }
+
+  i1-engine:
+    # One-shot · P3. Garante a engine TensorRT do pacote I1_PACOTE em I1_ENGINES_DIR:
+    # se já existe e carrega com o TensorRT da imagem, termina em segundos; senão roda o
+    # p2-build (FP16). Usa a mesma imagem do i1 (construída pelo serviço i1).
+    image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
+    # Imagem local (construída pelo serviço i1); não existe em registro nenhum.
+    pull_policy: never
+    profiles: [video]
+    restart: "no"
+    runtime: nvidia
+    environment:
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+    volumes:
+      - ${I1_ENGINES_DIR:?defina I1_ENGINES_DIR}:/opt/ods/engines
+      - ../comum/i1/preparar-engine.sh:/p3/preparar-engine.sh:ro
+    command: ["sh", "/p3/preparar-engine.sh", "/app/I1/artifacts/${I1_PACOTE:?defina I1_PACOTE}", "FP16"]
 
   i1:
-    # Detecção · MOD-1. Lê os quadros do P4 pela memória compartilhada; CPU (ultralytics).
-    build: ${SRC_DIR}/i1
-    image: ods-i1:${I1_REF:?fixe o commit do i1}
+    # Detecção · MOD-1. Lê os quadros do P4 pela memória compartilhada; GPU (TensorRT via P2).
+    # Imagem do Dockerfile.jetson do I1 (base nvcr.io/nvidia/l4t-jetpack:r36.4.0, p2[trt,cpu]).
+    # P2_BACKEND=trt: sem TensorRT o P2 dá erro em vez de cair calado para a CPU.
+    # Prova de GPU: artifact_version das mensagens termina em "-fp16" (ex.: app-plates-1.0.0-fp16).
+    # Para voltar à CPU: build: ${SRC_DIR}/i1 (Dockerfile padrão), image ods-i1:<ref>, sem
+    # runtime nvidia, e "--backend", "ultralytics" no comando.
+    build:
+      context: ${SRC_DIR}/i1
+      dockerfile: Dockerfile.jetson
+    image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
     profiles: [video]
+    # O I1 ainda sai com código 1 no fim do vídeo ("Control socket has closed"); esperado.
     restart: on-failure:5
     ipc: "service:p4"
+    runtime: nvidia
     environment:
       ODS_KAFKA_BROKER: ${KAFKA_BROKER}
-    # PROVISÓRIO: o run_detector.py (30df178) usa "os" e "BROKER_ENV_VAR" sem importá-los
-    # e cai com NameError (pyflakes não acusa outros nomes). O prefixo abaixo deixa os dois
-    # disponíveis sem alterar o código da MOD-1.
-    # Quando corrigirem, volte para: ["python3", "I1/run_detector.py", <mesmos argumentos>]
-    command: ["python3", "-c",
-              "import builtins, os, runpy, sys; from detector.config import BROKER_ENV_VAR; builtins.os = os; builtins.BROKER_ENV_VAR = BROKER_ENV_VAR; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
-              "--backend", "ultralytics",
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+    # O P2 carrega a engine pelo artifact_id/artifact_version do metadata.json
+    # (pasta /opt/ods/engines/app-plates-1.0.0, preparada pelo i1-engine).
+    command: ["python3", "I1/run_detector.py",
+              "--backend", "p2",
+              "--metadata", "/app/I1/artifacts/${I1_PACOTE:?defina I1_PACOTE}/metadata.json",
               "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
               "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
     volumes:
       - p4-shm:/tmp
-    depends_on: [p4]
+      - ${I1_ENGINES_DIR:?defina I1_ENGINES_DIR}:/opt/ods/engines:ro
+    depends_on:
+      p4: { condition: service_started }
+      i1-engine: { condition: service_completed_successfully }
 
   i2:
     # Rastreio · INV-1. Consome ods.i1.detections, publica ods.i2.tracks.
