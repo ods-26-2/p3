@@ -78,6 +78,9 @@ services:
     restart: unless-stopped
     environment:
       EXPO_PUBLIC_API_URL: http://${JETSON_IP:?defina JETSON_IP}:3000
+      # Para o QR do Expo Go (celular) apontar para a Jetson e não para o IP interno do
+      # container (a8/docs/docker.md, "Celular (Expo Go)"). No navegador não faz diferença.
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${JETSON_IP}
     ports:
       - "8081:8081"
     depends_on: [a8-backend]
@@ -98,6 +101,37 @@ services:
       OCR_MODELO: cct-s-v2-global-model
     volumes:
       - ${I7_IMAGENS_DIR:?defina I7_IMAGENS_DIR}:/dados/imagens:ro
+      - i7-saidas:/dados/saidas
+      - i7-cache:/root/.cache
+
+  i7-video:
+    # O I7 lendo um VÍDEO: extrai I7_QUADROS_FPS quadros/s de VIDEO_DIR/I7_VIDEO (script do P3,
+    # ./i7/extrair_quadros.py, na própria imagem do I7) e processa os quadros como fotos.
+    # Contorno até o I7 ler a câmera/P4. Sob demanda: ./a8.sh placas-video
+    image: ods-i7:${I7_REF}
+    pull_policy: never
+    profiles: [i7]
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        python /p3/i7/extrair_quadros.py &&
+        exec python "scripts/aplicacaoModelov5-fast+rodosol.py"
+    environment:
+      PUBLICACAO_MODO: kafka
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      KAFKA_TOPICO: ods.i7.plate_read
+      SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
+      PASTA_IMAGENS: /quadros
+      PASTA_SAIDA: /dados/saidas
+      OCR_MODELO: cct-s-v2-global-model
+      I7_VIDEO: ${I7_VIDEO:-cam0.mp4}
+      I7_QUADROS_FPS: ${I7_QUADROS_FPS:-2}
+      I7_QUADROS_MAX: ${I7_QUADROS_MAX:-0}
+    volumes:
+      - ${VIDEO_DIR}:/videos:ro
+      - ./i7:/p3/i7:ro
+      - i7-quadros:/quadros
       - i7-saidas:/dados/saidas
       - i7-cache:/root/.cache
 
@@ -285,6 +319,7 @@ volumes:
   a8-mysql: {}
   i7-saidas: {}
   i7-cache: {}
+  i7-quadros: {}
   p4-shm: {}
   s4-dados: {}
   s5-dados: {}

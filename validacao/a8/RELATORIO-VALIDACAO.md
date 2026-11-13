@@ -92,3 +92,10 @@ A validação do A8 é considerada **concluída** quando:
 - A URL da API e o nome do contêiner do banco passaram a poder ser trocados por variáveis (`API` e `DB_CONTAINER`).
 - No fluxo, as datas do veículo convidado passaram a ser **amanhã** (antes eram fixas em 05/11/2026), para o teste não quebrar se a API passar a rejeitar datas passadas.
 - Foi acrescentado o `comparar-banco-antes-depois.sh`, que automatiza a comparação feita manualmente.
+
+
+# Testes manuais
+
+- os commits A8_REF=66af0ba e I7_REF=a4da4b0 permitiram a correção dos containers;
+- o broker: Kafka da turma, listener PRIVATE 172.18.4.56:9093;
+- o resultado: 5 de 5 eventos entregues e processados.

@@ -5,10 +5,11 @@
 #   ./a8.sh subir          confere a placa, baixa o código, constrói o que falta e sobe tudo
 #   ./a8.sh subir --reconstruir   reconstrói todas as imagens, mesmo as que já existem
 #   ./a8.sh testar         teste de aceitação do A8: I7, vídeo do P4 e pedidos ao S4, S5 e S2
+#   ./a8.sh placas-video   o I7 lê as placas de VIDEO_DIR/I7_VIDEO e mostra as decisões do A8
 #   ./a8.sh status         containers, disco, Kafka da turma e último resultado de teste
 #   ./a8.sh parar          derruba a build (mantém banco, clipes e métricas)
 #
-# Variáveis opcionais: MIN_LIVRE_GB (padrão 4), I7_N (imagens do I7 no teste, padrão 5)
+# Variáveis opcionais: MIN_LIVRE_GB (padrão 4), I7_N (imagens do I7 no teste, padrão 5; só com I7_FONTE=imagens)
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
@@ -77,8 +78,38 @@ checar_kafka() {
 checar_entradas() {
   if [[ -f "$VIDEO_DIR/cam0.mp4" ]]; then ok "vídeo da cadeia: $VIDEO_DIR/cam0.mp4"
   else aviso "sem $VIDEO_DIR/cam0.mp4: a cadeia sobe, mas não há vídeo para o P4 tocar"; fi
-  if compgen -G "$I7_IMAGENS_DIR/*" >/dev/null; then ok "imagens do I7: $I7_IMAGENS_DIR"
+  if [[ "${I7_FONTE:-imagens}" == video ]]; then
+    if [[ -f "$VIDEO_DIR/$I7_VIDEO" ]]; then ok "I7 vai ler o vídeo $VIDEO_DIR/$I7_VIDEO ($I7_QUADROS_FPS quadros/s)"
+    else aviso "sem $VIDEO_DIR/$I7_VIDEO: o I7 não terá o que ler"; fi
+  elif compgen -G "$I7_IMAGENS_DIR/*" >/dev/null; then ok "imagens do I7: $I7_IMAGENS_DIR"
   else aviso "sem imagens em $I7_IMAGENS_DIR: o I7 não terá o que ler"; fi
+}
+
+# O I7 lê quadros extraídos do vídeo (serviço i7-video; usa a imagem do i7, que precisa existir).
+rodar_i7_video() {
+  docker image inspect "${IMG[i7]}" >/dev/null 2>&1 || erro "a imagem ${IMG[i7]} não existe; rode ./a8.sh subir antes"
+  [[ -f "$VIDEO_DIR/$I7_VIDEO" ]] || erro "sem $VIDEO_DIR/$I7_VIDEO para o I7 ler"
+  dc --profile i7 run --rm i7-video | grep -E '^\[QUADROS\]|^\[[0-9]+/|Publicação:|PUBLICAÇÃO' \
+    || aviso "o I7 terminou com erro"
+}
+
+# Decisões do A8 (log do a8-backend) desde o instante $1.
+decisoes_desde() {
+  docker logs --since "$1" "$(dc ps -q a8-backend)" 2>&1 | grep -E '\[KAFKA\].*->|\[CANCELA\]' || echo "  nenhuma"
+}
+
+placas_video() {
+  etapa "Conferindo"
+  checar_segredos
+  checar_kafka
+  [[ "$(dc ps --format '{{.State}}' a8-backend 2>/dev/null)" == running ]] \
+    || erro "a8-backend não está rodando. Rode ./a8.sh subir antes."
+  local t0; t0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  etapa "I7 lendo as placas de $VIDEO_DIR/$I7_VIDEO ($I7_QUADROS_FPS quadros/s, câmera $I7_SOURCE_ID)"
+  rodar_i7_video
+  sleep 3
+  etapa "Decisões do A8"
+  decisoes_desde "$t0"
 }
 
 construir() {
@@ -173,8 +204,11 @@ testar() {
   done
   ok "escutando o Kafka como A8"
 
-  etapa "2/5 I7 lendo placas ($I7_N imagens)"
-  if compgen -G "$I7_IMAGENS_DIR/*" >/dev/null; then
+  if [[ "${I7_FONTE:-imagens}" == video ]]; then
+    etapa "2/5 I7 lendo placas do vídeo $I7_VIDEO ($I7_QUADROS_FPS quadros/s)"
+    rodar_i7_video
+  elif compgen -G "$I7_IMAGENS_DIR/*" >/dev/null; then
+    etapa "2/5 I7 lendo placas ($I7_N imagens)"
     dc --profile i7 run --rm i7 "scripts/aplicacaoModelov5-fast+rodosol.py" -n "$I7_N" \
       | grep -E '^\[[0-9]+/|Publicação:' || aviso "o I7 terminou com erro"
   else
@@ -230,8 +264,9 @@ parar() {
 case "${1:-subir}" in
   subir)  subir "${2:-}" ;;
   testar) testar ;;
+  placas-video) placas_video ;;
   status) checar_segredos >/dev/null; status ;;
   parar)  checar_segredos >/dev/null; parar ;;
-  -h|--help|ajuda) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' ;;
-  *) erro "comando desconhecido: $1 (use subir, testar, status ou parar)" ;;
+  -h|--help|ajuda) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) erro "comando desconhecido: $1 (use subir, testar, placas-video, status ou parar)" ;;
 esac

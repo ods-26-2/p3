@@ -1,2 +1,4 @@
 builds/*/*.secrets.env
 builds/*/resultados/
+temp/
+__pycache__/
