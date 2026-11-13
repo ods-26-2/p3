@@ -1,0 +1,124 @@
+# ODS — build do A6 · Libras / acessibilidade (APL-2)
+# Montada a partir do código atual (main do a6 e do i4, 13/11/2026), não só do plano 6c.
+#
+# O que o código do A6 usa no Kafka (kafka_integration.py):
+#   consome ods.i4.sign, ods.i4.facial_marker, ods.s6.synthesis.reply, ods.i4.lexicon_capture.reply
+#   publica ods.s6.synthesis.command, ods.i4.lexicon_capture.command
+#
+# Composição:
+#   a6           tradutor (servidor web + cliente Kafka, porta A6_PORTA). Roda com --no-mock:
+#                o S6 que responde é o real. A página do tradutor continua usando o motor
+#                interno do A6 para a pré-visualização (é assim que o APL-2 fez).
+#   s6           síntese de Libras · INV-2, construído de i4/s6_synthesis (o repo s6 está vazio).
+#                Grava as trajetórias num volume compartilhado com o A6, como o próprio S6 pede
+#                (TrajectoryStore: "quem consome precisa enxergar essa pasta").
+#   i4-amostra   perfil "i4", sob demanda: publicador de amostra do próprio I4
+#                (pipeline/publica_amostra.py) com um sinal do léxico. Usa a imagem do s6.
+#
+# Fora, com o motivo:
+#   I4 ao vivo   depende do servidor de vídeo em C++ do INV-2 (src/server.cpp) e de torch +
+#                mediapipe; sem contrato com o P4. Comandos de captura de léxico ficam sem resposta.
+#   P4, P5, S4   a 6c lista para o A6, mas o código atual não os consome
+#   I5           o A6 não consome ods.i5.transcript no código atual
+#
+# Uso: ./a6.sh · ./a6.sh amostra · ./a6.sh status · ./a6.sh parar
+
+name: ods-a6
+
+services:
+
+  a6:
+    build: ${SRC_DIR:?defina SRC_DIR}/a6
+    image: ods-a6:${A6_REF:?fixe o commit do a6}
+    restart: unless-stopped
+    command: ["python", "servidor_a6.py", "--host", "0.0.0.0", "--port", "8080", "--no-mock"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      KAFKA_AUTO_OFFSET_RESET: latest
+    volumes:
+      # Pasta onde o A6 procura a trajetória pelo nome do arquivo de trajectory_ref.
+      # Na primeira subida o volume recebe os exemplos que vêm na imagem do A6.
+      - trajetorias:/app/avatar/entry
+    ports:
+      - "${A6_PORTA:-8086}:8080"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s6:
+    # Síntese de Libras · INV-2. O repo não tem Dockerfile; este é do P3 e só leva o que o
+    # S6 usa (numpy, pandas, pyarrow, confluent-kafka): nada de torch nem mediapipe.
+    build:
+      context: ${SRC_DIR}/i4
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app
+        RUN pip install --no-cache-dir numpy==1.26.4 pandas==2.2.3 pyarrow==17.0.0 confluent-kafka==2.6.1
+        WORKDIR /app
+        COPY ods_bus/ ods_bus/
+        COPY pipeline/ pipeline/
+        COPY s6_synthesis/ s6_synthesis/
+        COPY lexicon/ lexicon/
+        CMD ["python", "-m", "s6_synthesis.bus_service", "--lexicon-dir", "lexicon", "--trajectory-dir", "/trajetorias"]
+    image: ods-s6:${I4_REF:?fixe o commit do i4}
+    restart: unless-stopped
+    environment:
+      ODS_KAFKA_BOOTSTRAP: ${KAFKA_BROKER}
+    volumes:
+      - trajetorias:/trajetorias
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+      # O A6 cria o volume primeiro, para os exemplos dele entrarem na pasta.
+      a6: { condition: service_started }
+
+  i4-amostra:
+    # Publica um sinal do léxico como ods.i4.sign, com o publicador do próprio I4.
+    image: ods-s6:${I4_REF}
+    pull_policy: never
+    profiles: [i4]
+    restart: "no"
+    environment:
+      ODS_KAFKA_BOOTSTRAP: ${KAFKA_BROKER}
+    command: ["python", "-m", "pipeline.publica_amostra",
+              "--parquet", "lexicon/lexicon-${I4_AMOSTRA_SINAL:-Aluno}.parquet", "--source-id", "cam0"]
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da turma. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ods.i4.sign ods.i4.keypoints ods.i4.facial_marker
+        ods.i4.lexicon_capture.command ods.i4.lexicon_capture.reply
+        ods.s6.synthesis.command ods.s6.synthesis.reply ods.artifact.published; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+
+  aceite:
+    # Teste de aceitação (a6.sh testar): aceite/aceite_a6.py + biblioteca ../comum/aceite.
+    build:
+      context: ../comum/aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1 cryptography==43.0.3
+    image: ods-aceite:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+      I4_AMOSTRA_SINAL: ${I4_AMOSTRA_SINAL:-Aluno}
+      TRAJETORIAS_DIR: /trajetorias
+    command: ["python", "-u", "/aceite/aceite_a6.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ../comum/aceite:/comum:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
+      - trajetorias:/trajetorias:ro
+
+volumes:
+  trajetorias: {}
