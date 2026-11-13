@@ -1,0 +1,182 @@
+# ODS — build do A1 · Indústria / inspeção (VER-1)
+# Montada a partir do código atual dos repositórios (13/11/2026), não só do plano 6c.
+#
+# O que o código do A1 consome hoje:
+#   ods.industria.defeito_classificado   (contrato 2.0 do VER-1, publicado pelo I8;
+#                                         a 6c chama de ods.i8.piece_analysis)
+#   ods.s4.capture.reply, ods.s4.clip    (pedido de evidência ao S4, com S4_ENABLED=1)
+# P7 e S5 existem no A1 só como adaptadores falsos; nenhum worker real consome ou publica.
+#
+# Composição:
+#   a1-db        PostgreSQL do A1
+#   a1-backend   API v1 (FastAPI), consome o I8 e pede evidência ao S4
+#   a1-frontend  interface de inspeção (nginx; repassa /api/ para "backend:8000")
+#   s4           evidência de mídia, lendo VIDEO_DIR/VIDEO_ARQUIVO
+#   i8           perfil "i8", sob demanda: o publisher real do I8 reenvia os 4 eventos de
+#                exemplo do próprio I8 (não há modelo treinado no repositório)
+#   s5           perfil "cadeia": a 6c lista o S5 para o A1, mas nada publica eventos
+#                que o S5 agregue nesta build (lacuna da 6c: S5 sem fonte para A1)
+#
+# Fora, com o motivo:
+#   P4/I1   o I8 atual não consome I1 (não há inferência em tempo real a partir do vídeo)
+#   P7      o repositório p7 só tem o driver serial, sem contrato no Kafka
+#   S3      opcional na 6c e o A1 não publica ods.s3.alert.command
+#
+# Uso (o a1.sh faz tudo isso): ./a1.sh · ./a1.sh status · ./a1.sh parar · ./limpar.sh
+#   docker compose --env-file a1.env --env-file a1.secrets.env --profile i8 run --rm i8
+
+name: ods-a1
+
+services:
+
+  a1-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: a1
+      POSTGRES_USER: a1
+      POSTGRES_PASSWORD: ${A1_DB_PASSWORD:?defina A1_DB_PASSWORD em a1.secrets.env}
+    volumes:
+      - a1-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U a1 -d a1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  a1-backend:
+    build:
+      context: ${SRC_DIR:?defina SRC_DIR}/a1
+      target: backend
+    image: ods-a1-backend:${A1_REF:?fixe o commit do a1}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://a1:${A1_DB_PASSWORD}@a1-db:5432/a1
+      KAFKA_BROKER_URL: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      KAFKA_TOPIC: ods.industria.defeito_classificado
+      KAFKA_GROUP_ID: VER-1-A1-Consumer
+      S4_ENABLED: "1"
+      S4_GROUP_ID: a1-s4-v1
+    networks:
+      default:
+        # O nginx do frontend do A1 tem "backend:8000" fixo no template.
+        aliases: [backend]
+    ports:
+      - "127.0.0.1:8010:8000"
+    depends_on:
+      a1-db: { condition: service_healthy }
+      kafka-topicos: { condition: service_completed_successfully }
+
+  a1-frontend:
+    build:
+      context: ${SRC_DIR}/a1
+      target: frontend
+    image: ods-a1-frontend:${A1_REF}
+    restart: unless-stopped
+    environment:
+      A1_API_BASE: /api/v1
+    ports:
+      - "${A1_PORTA:-5500}:80"
+    depends_on: [a1-backend]
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da turma. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ods.industria.defeito_classificado ods.session.started
+        ods.s4.capture.command ods.s4.capture.reply ods.s4.clip ods.s4.clip.query
+        ods.s4.clip.query.reply ods.s5.event_metrics ods.s5.metrics.query ods.s5.metrics.reply; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+  i8:
+    # Publisher real do I8 (contrato 2.0). Sob demanda: ./a1.sh e depois
+    #   dc --profile i8 run --rm i8
+    # Gera os 4 eventos de exemplo do próprio I8 (shared/mocks/kafka-2.0) com ids e horários
+    # novos e publica pelo scripts.publish_events, que valida contra a taxonomia do A1.
+    build:
+      context: ${SRC_DIR}/i8
+      dockerfile: validacao-local/Dockerfile.publisher
+    image: ods-i8-publisher:${I8_REF:?fixe o commit do i8}
+    profiles: [i8]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER_URL: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ods.industria.defeito_classificado
+      I8_TAXONOMIA_DIR: /taxonomias/defects-a1-1.0.0
+      I8_TAXONOMIA_VERSAO: defects-a1-1.0.0
+    command: ["python", "/p3/i8/publicar_exemplos.py"]
+    volumes:
+      - ./i8:/p3/i8:ro
+      - ${SRC_DIR}/a1/shared/artifacts/defect-taxonomy:/taxonomias:ro
+
+  s4:
+    # Evidência de mídia · MOD-2. Grava a partir do próprio arquivo de vídeo. API em 127.0.0.1:18084.
+    build:
+      context: ${SRC_DIR}/s4
+      target: production
+    image: ods-s4:${S4_REF:?fixe o commit do s4}
+    restart: unless-stopped
+    command: ["/app/s4_media_evidence", "--port", "18084", "--db", "/data/s4.db",
+              "--media-dir", "/data/media", "--media-quota-bytes", "${S4_MEDIA_QUOTA_BYTES:-1073741824}"]
+    environment:
+      ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
+      ODS_S4_KAFKA_GROUP_ID: s4-media-evidence-a1
+      ODS_S4_KAFKA_CLIENT_ID: s4
+      ODS_S4_SOURCE: /videos/${VIDEO_ARQUIVO:-linha1.mp4}
+      ODS_S4_FPS: ${VIDEO_FPS:-10}
+    volumes:
+      - s4-dados:/data
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+    ports:
+      - "127.0.0.1:18084:18084"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s5:
+    # Métricas · MOD-2. Perfil "cadeia": sem fonte de eventos para o A1 nesta build.
+    build: ${SRC_DIR}/s5
+    image: ods-s5:${S5_REF:?fixe o commit do s5}
+    profiles: [cadeia]
+    restart: unless-stopped
+    environment:
+      S5_KAFKA_BROKERS: ${KAFKA_BROKER}
+      S5_KAFKA_GROUP_ID: S5-metricas-a1
+    volumes:
+      - s5-dados:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+
+  aceite:
+    # Teste de aceitação (a1.sh testar): aceite/aceite_a1.py + biblioteca ../comum/aceite.
+    build:
+      context: ../comum/aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1 cryptography==43.0.3
+    image: ods-aceite:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+    command: ["python", "-u", "/aceite/aceite_a1.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ../comum/aceite:/comum:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
+
+volumes:
+  a1-db: {}
+  s4-dados: {}
+  s5-dados: {}

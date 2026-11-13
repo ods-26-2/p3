@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# limpar.sh — remove da Jetson o que a build do A3 criou (P3 / SIS-1).
+#
+#   ./limpar.sh                    containers e rede da build; volumes ficam
+#   ./limpar.sh --imagens          também as imagens da build e o cache de build
+#   ./limpar.sh --dados            também os volumes (clipes do S4, métricas do S5, banco do S3);
+#                                  pede que você digite "a3" para confirmar
+#   ./limpar.sh --codigo           também os clones em SRC_DIR que nenhuma outra build usa
+#   ./limpar.sh --tudo             as três opções acima
+#   ./limpar.sh --imagens --manter a8   não remove as imagens que a build do a8 também usa
+#
+# Nunca toca no container "kafka" da turma, nas imagens do SIS-1, em outras aplicações
+# nem na pasta resultados/ (evidência dos testes).
+APP=a3
+SEGREDOS=()
+
+lembrete_backup() {
+  echo "  O histórico de alertas fica no volume do S3 (s3-dados)."
+}
+
+# shellcheck source=../comum/lib.sh
+source "$(dirname "$(readlink -f "$0")")/../comum/lib.sh"
+limpar_build "$@"

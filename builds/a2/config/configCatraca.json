@@ -1,0 +1,13 @@
+{
+  "devices": [
+    {
+      "turnstile_id": "catraca-01",
+      "model": "simulated",
+      "protocol": "simulation",
+      "simulation": {
+        "pass_after": 2,
+        "direction": "entrada"
+      }
+    }
+  ]
+}

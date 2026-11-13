@@ -18,13 +18,19 @@ validacao/
 ├── README.md                      <- Este arquivo
 ├── validacao-geral/
 │   ├── evidencias/                <- Resultados
-│   └── validar-hardware.sh        <- Valida arquitetura, GPU, CUDA, JetPack e memória
+│   ├── validar-hardware-jetson.sh <- Valida arquitetura, GPU, CUDA, JetPack e memória
+│   ├── validar-sistema.sh         <- Critérios S1–S9 de qualquer build: ./validar-sistema.sh <app> [--queda <serviço>]
+│   └── fluxo-comum.sh             <- Funções usadas pelos validar-<app>-fluxo.sh
+├── a1/ … a7/                      <- Mesma estrutura do a8 (scripts prontos, ainda não executados na Jetson)
 └── a8/                            <- Exemplo de estrutura por aplicação
     ├── README.md                  <- Como executar a validação específica
     ├── RELATORIO-VALIDACAO.md     <- Critérios, testes e parecer final
     ├── validar-a8-fluxo.sh        <- Script do fluxo ponta a ponta
     └── evidencias/                <- Logs de execução com data no nome
 ```
+Além dos critérios de sistema (S) e do fluxo pela API (F), cada build tem um teste de aceitação
+pelo Kafka da turma (C): `builds/<app>/<app>.sh testar`, com relatório em `builds/<app>/resultados/`.
+
 *Cada nova aplicação deve seguir rigorosamente a estrutura da pasta `a8/`.*
 
 ## Critérios de Sistema (Comuns a todas as aplicações)

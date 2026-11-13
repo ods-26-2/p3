@@ -1,0 +1,10 @@
+{
+  "artifact_id": "zones-a4-p3",
+  "artifact_version": "zones-a4-p3-1",
+  "kind": "ZONES",
+  "owner": "A4",
+  "uri": "zones-a4-p3-1.json",
+  "hash_sha256": "d189a983e80114fb8621e35f5323bbee3facbb4ae96259ef8777ed9dc30ec658",
+  "valid_from": "2026-11-13T00:00:00.000Z",
+  "schema_version": "1.0"
+}

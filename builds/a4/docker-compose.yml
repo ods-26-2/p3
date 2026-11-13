@@ -1,0 +1,276 @@
+# ODS — build do A4 · Esporte / arbitragem (INV-1)
+# Montada a partir do código atual (main do a4, 13/11/2026), não só do plano 6c.
+#
+# O que o código do A4 consome hoje (back/kafka_bridge.py, com A4_KAFKA_ENABLED=true):
+#   ods.s1.position (bolas: classe "ball", usa o point_px), ods.i3.calibration,
+#   ods.session.started, ods.p7.state, ods.s4.clip
+# e publica ods.p7.move.command e ods.s4.capture.command.
+#
+# Composição:
+#   a4-back      API do árbitro (FastAPI, porta 8000). Sem Dockerfile no repo: o daqui é do P3.
+#   a4-front     interface (Next.js, porta 3000). Sem Dockerfile no repo: o daqui é do P3.
+#                NEXT_PUBLIC_API_URL é gravado na construção: mudou o JETSON_IP, reconstrua.
+#   i2, s1, s4   rastreio, zonas e evidência (contínuos)
+#   p4, i1       perfil "video": toca VIDEO_DIR/VIDEO_ARQUIVO uma vez; o I1 usa o modelo
+#                app-volei (classe "ball") que o próprio INV-1 publicou em a4/modelo/
+#   i3           perfil "i3", sob demanda: publica a calibração da quadra (./a4.sh calibrar)
+#   s5           perfil "cadeia" (opcional na 6c; API em 127.0.0.1:8005)
+#
+# Fora: P7 (o repositório p7 só tem o driver serial, sem Kafka): os comandos de ângulo do A4
+# ficam sem resposta e o A4 mostra "aguardando estado de ods.p7.state".
+#
+# Uso: ./a4.sh · ./a4.sh calibrar · ./a4.sh video · ./a4.sh status · ./a4.sh parar
+
+name: ods-a4
+
+services:
+
+  a4-back:
+    build:
+      context: ${SRC_DIR:?defina SRC_DIR}/a4/back
+      dockerfile_inline: |
+        # numpy 2.5 exige Python recente; 3.12 tem rodas para a Jetson (aarch64).
+        FROM python:3.12-slim-bookworm
+        ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY *.py ./
+        EXPOSE 8000
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    image: ods-a4-back:${A4_REF:?fixe o commit do a4}
+    restart: unless-stopped
+    environment:
+      A4_MODO_DEMO: "false"
+      A4_KAFKA_ENABLED: "true"
+      A4_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      A4_KAFKA_GROUP_ID: A4-score-manager
+      A4_TOKEN: ${A4_TOKEN:?defina A4_TOKEN em a4.secrets.env}
+      A4_DADOS_DIR: /dados
+      A4_ARTEFATOS_DIR: /dados/artefatos
+      A4_ZONA_TOLERANCIA_CM: "30"
+      A4_P6_VIDEO: /videos/${VIDEO_ARQUIVO:-quadra.mp4}
+      # O replay toca o clipe do S4 direto no navegador do árbitro: por isso o S4 desta build
+      # publica a porta 18084 em todas as interfaces (nas outras builds fica em 127.0.0.1).
+      A4_S4_MEDIA_URL: http://${JETSON_IP:?defina JETSON_IP}:18084
+      A4_P7_SOURCE_ID: ${A4_P7_SOURCE_ID:-pt0}
+    volumes:
+      - a4-dados:/dados
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  a4-front:
+    build:
+      context: ${SRC_DIR}/a4/front
+      args:
+        NEXT_PUBLIC_API_URL: http://${JETSON_IP}:8000
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim
+        ENV NEXT_TELEMETRY_DISABLED=1
+        WORKDIR /app
+        COPY package.json package-lock.json ./
+        RUN npm ci
+        COPY . .
+        ARG NEXT_PUBLIC_API_URL
+        ENV NEXT_PUBLIC_API_URL=$${NEXT_PUBLIC_API_URL}
+        RUN npm run build && npm cache clean --force
+        EXPOSE 3000
+        CMD ["npx", "next", "start", "-p", "3000", "-H", "0.0.0.0"]
+    image: ods-a4-front:${A4_REF}
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on: [a4-back]
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da turma. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ods.session.started ods.p4.frame ods.i1.detections ods.i2.tracks
+        ods.i3.calibration ods.artifact.published ods.s1.position ods.s1.zone_transition
+        ods.s1.zone_occupancy ods.p7.move.command ods.p7.move.reply ods.p7.state
+        ods.s4.clip ods.s4.capture.command ods.s4.capture.reply ods.s4.clip.query
+        ods.s4.clip.query.reply ods.s5.zone_metrics ods.s5.metrics.query ods.s5.metrics.reply; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+  # ======================= cadeia =======================
+
+  p4:
+    # Fonte de vídeo · SIS-2. O repo não tem Dockerfile; este é do P3 (o mesmo do A8).
+    build:
+      context: ${SRC_DIR}/p4
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+              python3-gi gir1.2-gstreamer-1.0 \
+              gstreamer1.0-plugins-base gstreamer1.0-plugins-bad \
+            && rm -rf /var/lib/apt/lists/*
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY src/ src/
+        COPY config/ config/
+        ENV PYTHONPATH=/app:/usr/lib/python3/dist-packages PYTHONUNBUFFERED=1
+        CMD ["sh", "-c", "rm -f /tmp/p4_file_shm; exec python -m src.main"]
+    image: ods-p4:${P4_REF:?fixe o commit do p4}
+    profiles: [video]
+    restart: "no"
+    ipc: shareable
+    environment:
+      P4_SOURCE: file
+      P4_VIDEO_PATH: /videos/${VIDEO_ARQUIVO:-quadra.mp4}
+      P4_MODO_DIAGNOSTICO: "false"
+      P4_ATIVAR_KAFKA: "true"
+      P4_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+    volumes:
+      - ${VIDEO_DIR}:/videos:ro
+      - p4-shm:/tmp
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+      i2: { condition: service_started }
+      s1: { condition: service_started }
+      s4: { condition: service_started }
+
+  i1:
+    # Detecção · MOD-1, com o modelo app-volei 1.0.0 do INV-1 (classe "ball"); CPU (ultralytics).
+    build: ${SRC_DIR}/i1
+    image: ods-i1:${I1_REF:?fixe o commit do i1}
+    profiles: [video]
+    restart: on-failure:5
+    ipc: "service:p4"
+    environment:
+      ODS_KAFKA_BROKER: ${KAFKA_BROKER}
+    # PROVISÓRIO (o mesmo do A8): o run_detector.py (30df178) usa "os" e "BROKER_ENV_VAR" sem
+    # importá-los. Quando a MOD-1 corrigir, volte para ["python3", "I1/run_detector.py", <argumentos>].
+    command: ["python3", "-c",
+              "import builtins, os, runpy, sys; from detector.config import BROKER_ENV_VAR; builtins.os = os; builtins.BROKER_ENV_VAR = BROKER_ENV_VAR; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
+              "--backend", "ultralytics",
+              "--onnx", "/modelo/app-volei.onnx", "--metadata", "/modelo/metadata.json",
+              "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.30",
+              "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
+    volumes:
+      - p4-shm:/tmp
+      - ${SRC_DIR}/a4/modelo/app-volei/1.0.0:/modelo:ro
+    depends_on: [p4]
+
+  i2:
+    # Rastreio · INV-1. Consome ods.i1.detections, publica ods.i2.tracks.
+    build: ${SRC_DIR}/i2
+    image: ods-i2:${I2_REF:?fixe o commit do i2}
+    restart: unless-stopped
+    command: ["--i1", "${KAFKA_BROKER}", "--kafka", "${KAFKA_BROKER}", "--fps", "${VIDEO_FPS:-30}"]
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  i3:
+    # Calibração · INV-1. Artefato, não serviço: ./a4.sh calibrar publica ods.i3.calibration
+    # (o tópico guarda a última; o A4 relê ao reiniciar). Referencial = o que o A4 espera.
+    build: ${SRC_DIR}/i3
+    image: ods-i3:${I3_REF:?fixe o commit do i3}
+    profiles: [i3]
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        exec python -u main.py --kafka ${KAFKA_BROKER} --source-id ${VIDEO_SOURCE_ID:-file_quadra}
+        --espaco quadra-volei-fivb --origem "canto proximo esquerdo"
+        --eixos "x ao longo dos 18 m, y afastando da camera"
+        --largura 1280 --altura 720 < /i3/correspondencias.csv
+    volumes:
+      - ${I3_CSV:?defina I3_CSV}:/i3/correspondencias.csv:ro
+
+  s1:
+    # Zonas e posição · VER-6. Consome ods.i2.tracks, publica ods.s1.position (o que o A4 lê).
+    # Zona de exemplo do P3 (quadro inteiro, PIXELS 1280x720): o A4 usa o point_px da bola.
+    build: ${SRC_DIR}/s1
+    image: ods-s1:${S1_REF:?fixe o commit do s1}
+    restart: unless-stopped
+    environment:
+      S1_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+      S1_ZONES_FILE: /artefatos/zones-a4-p3-1.json
+      S1_ZONES_VERSION: zones-a4-p3-1
+    volumes:
+      - ./artefatos:/artefatos:ro
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s4:
+    # Evidência de mídia · MOD-2: o replay da jogada. Porta aberta para o navegador (ver a4-back).
+    build:
+      context: ${SRC_DIR}/s4
+      target: production
+    image: ods-s4:${S4_REF:?fixe o commit do s4}
+    restart: unless-stopped
+    command: ["/app/s4_media_evidence", "--port", "18084", "--db", "/data/s4.db",
+              "--media-dir", "/data/media", "--media-quota-bytes", "${S4_MEDIA_QUOTA_BYTES:-1073741824}"]
+    environment:
+      ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
+      ODS_S4_KAFKA_GROUP_ID: s4-media-evidence-a4
+      ODS_S4_KAFKA_CLIENT_ID: s4
+      ODS_S4_SOURCE: /videos/${VIDEO_ARQUIVO:-quadra.mp4}
+      ODS_S4_FPS: ${VIDEO_FPS:-30}
+      ODS_S4_CORS_ORIGIN: http://${JETSON_IP}:3000
+    volumes:
+      - s4-dados:/data
+      - ${VIDEO_DIR}:/videos:ro
+    ports:
+      - "18084:18084"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s5:
+    # Métricas · MOD-2. Perfil "cadeia" (opcional para o A4). API em 127.0.0.1:8005.
+    build: ${SRC_DIR}/s5
+    image: ods-s5:${S5_REF:?fixe o commit do s5}
+    profiles: [cadeia]
+    restart: unless-stopped
+    environment:
+      S5_KAFKA_BROKERS: ${KAFKA_BROKER}
+      S5_KAFKA_GROUP_ID: S5-metricas-a4
+      S5_ARTIFACTS: /artefatos/zones-a4-p3-1.descriptor.json
+      S5_ARTIFACT_REGISTRY_DIR: /artefatos
+    volumes:
+      - s5-dados:/data
+      - ./artefatos:/artefatos:ro
+    ports:
+      - "127.0.0.1:8005:8000"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+
+  aceite:
+    # Teste de aceitação (a4.sh testar): aceite/aceite_a4.py + biblioteca ../comum/aceite.
+    build:
+      context: ../comum/aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1 cryptography==43.0.3
+    image: ods-aceite:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+      A4_TOKEN: ${A4_TOKEN}
+      VIDEO_SOURCE_ID: ${VIDEO_SOURCE_ID:-file_quadra}
+    command: ["python", "-u", "/aceite/aceite_a4.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ../comum/aceite:/comum:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
+
+volumes:
+  a4-dados: {}
+  p4-shm: {}
+  s4-dados: {}
+  s5-dados: {}

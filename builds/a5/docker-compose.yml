@@ -1,0 +1,260 @@
+# ODS — build do A5 · EPI / segurança (VER-3)
+# Montada a partir do código atual (main, 13/11/2026), não só do plano 6c.
+#
+# O que o código do A5 usa no Kafka (A5_BUS=kafka; docs/kafka.md do A5):
+#   ods.s3.alert, ods.s3.alert_action.*, ods.s3.alerts.*   (S3)
+#   ods.s4.clip, ods.s4.clip.query                         (S4)
+#   ods.s2.rules.command/.reply                            (S2: sem Kafka -> o pedido expira, 504)
+#   ods.artifact.published                                 (anuncia ZONES, RULES, PPE_CATALOG, ROUTING)
+# P6 e I3 continuam simulados dentro do A5 (decisão do VER-3).
+#
+# Composição:
+#   a5-backend   API (FastAPI) em 127.0.0.1:8000; o acesso é pelo nginx do front
+#   a5-frontend  interface (porta 8095) e registro de artefatos em /registro
+#   s3           alertas · VER-3, com o ROUTING de exemplo do A5 que vem na imagem do S3
+#   s4           evidência de mídia, lendo VIDEO_DIR/cam0.mp4
+#   i9, i2, s1   perfil "cadeia": EPI relacional, rastreio e zonas (alimentariam o S2)
+#   p4, i1       perfil "video": toca VIDEO_DIR/cam0.mp4 uma vez
+#
+# Fora: S2 (sem Kafka) — sem ele não há ods.s2.event, então nenhum alerta automático de EPI
+# nasce da cadeia; os alertas do A5 hoje vêm de comandos. Não há modelo de EPI publicado para
+# o I1 (B5/MOD-1): a cadeia prova o transporte até o I9, não a detecção de EPI.
+#
+# Uso: ./a5.sh · ./a5.sh cadeia · ./a5.sh video · ./a5.sh status · ./a5.sh parar
+
+name: ods-a5
+
+services:
+
+  a5-backend:
+    build: ${SRC_DIR:?defina SRC_DIR}/a5/a5-epi-seguranca
+    image: ods-a5-backend:${A5_REF:?fixe o commit do a5}
+    restart: unless-stopped
+    environment:
+      A5_ENV: ${A5_ENV:-production}
+      A5_LOG_LEVEL: INFO
+      A5_BUS: kafka
+      A5_KAFKA_BOOTSTRAP: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      A5_KAFKA_GROUP_ID: A5-backend
+      A5_KAFKA_ENVELOPE_OCCURRED_AT: "false"
+      A5_DATABASE_URL: sqlite:////data/a5.db
+      # Endereço que os outros componentes usam para baixar os artefatos do A5
+      A5_REGISTRY_BASE_URL: http://${JETSON_IP:?defina JETSON_IP}:8095/registro
+      A5_EXIGIR_LOGIN: ${A5_EXIGIR_LOGIN:-true}
+      A5_ADMIN_SENHA: ${A5_ADMIN_SENHA:?defina A5_ADMIN_SENHA em a5.secrets.env}
+      A5_ZONAS_COORDENADAS: PIXELS
+    networks:
+      default:
+        # O nginx do front do A5 tem "backend:8000" fixo.
+        aliases: [backend]
+    volumes:
+      - a5-dados:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  a5-frontend:
+    build: ${SRC_DIR}/a5/frontend
+    image: ods-a5-frontend:${A5_REF}
+    restart: unless-stopped
+    ports:
+      # 8095 em vez de 8080, como o VER-3 definiu (a Jetson já usa 8080)
+      - "8095:80"
+    depends_on: [a5-backend]
+
+  s3:
+    # Alertas e notificações · VER-3. Comando padrão da imagem: ROUTING e permissões de
+    # exemplo do A5 (routing-a5-1), banco em /dados e criação dos tópicos do S3.
+    build: ${SRC_DIR}/s3
+    image: ods-s3:${S3_REF:?fixe o commit do s3}
+    restart: unless-stopped
+    environment:
+      S3_KAFKA_BOOTSTRAP: ${KAFKA_BROKER}
+      S3_KAFKA_GROUP_ID: S3-alertas-a5
+      S3_PRODUTORES_COMANDOS: A5
+    volumes:
+      - s3-dados:/dados
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da turma. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ods.session.started ods.p4.frame ods.i1.detections ods.i2.tracks
+        ods.i3.calibration ods.artifact.published ods.i9.ppe_compliance ods.i9.dlq
+        ods.s1.position ods.s1.zone_transition ods.s1.zone_occupancy
+        ods.s2.event ods.s2.entity ods.s2.rules.command ods.s2.rules.reply
+        ods.s3.alert ods.s3.alert.command ods.s3.alert.reply ods.s3.alert_action.command
+        ods.s3.alert_action.reply ods.s3.alerts.query ods.s3.alerts.reply
+        ods.s4.clip ods.s4.capture.command ods.s4.capture.reply ods.s4.clip.query
+        ods.s4.clip.reply ods.s4.clip.query.reply; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+  s4:
+    # Evidência de mídia · MOD-2. Grava a partir do próprio MP4. API em 127.0.0.1:18084.
+    build:
+      context: ${SRC_DIR}/s4
+      target: production
+    image: ods-s4:${S4_REF:?fixe o commit do s4}
+    restart: unless-stopped
+    command: ["/app/s4_media_evidence", "--port", "18084", "--db", "/data/s4.db",
+              "--media-dir", "/data/media", "--media-quota-bytes", "${S4_MEDIA_QUOTA_BYTES:-1073741824}"]
+    environment:
+      ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
+      ODS_S4_KAFKA_GROUP_ID: s4-media-evidence-a5
+      ODS_S4_KAFKA_CLIENT_ID: s4
+      ODS_S4_SOURCE: /videos/cam0.mp4
+      ODS_S4_FPS: ${VIDEO_FPS:-10}
+    volumes:
+      - s4-dados:/data
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+    ports:
+      - "127.0.0.1:18084:18084"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  # ======================= cadeia =======================
+
+  i9:
+    # Conformidade de EPI · VER-3. Consome ods.i1.detections, ods.i3.calibration e
+    # ods.artifact.published (catálogo do A5); publica ods.i9.ppe_compliance.
+    # O repo não tem Dockerfile; este é do P3. Copia só o código: o dataset (323 MB) fica fora.
+    build:
+      context: ${SRC_DIR}/i9/I9
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+        WORKDIR /app
+        COPY requirements-kafka.txt .
+        RUN pip install --no-cache-dir -r requirements-kafka.txt
+        COPY main.py calibrate.py evaluate.py optimize.py policy_calibrated.json ./
+        COPY src/ src/
+        COPY config/ config/
+        COPY examples/ examples/
+        COPY tools/ tools/
+        CMD ["python", "-u", "main.py", "--kafka"]
+    image: ods-i9:${I9_REF:?fixe o commit do i9}
+    profiles: [cadeia]
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+      I9_KAFKA_GROUP_ID: I9-epi
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  i2:
+    # Rastreio · INV-1. Consome ods.i1.detections, publica ods.i2.tracks.
+    build: ${SRC_DIR}/i2
+    image: ods-i2:${I2_REF:?fixe o commit do i2}
+    profiles: [cadeia]
+    restart: unless-stopped
+    command: ["--i1", "${KAFKA_BROKER}", "--kafka", "${KAFKA_BROKER}", "--fps", "${VIDEO_FPS:-10}"]
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s1:
+    # Zonas · VER-6. Zona de exemplo do P3 (galpao-solda, o nome que o catálogo do A5 usa).
+    build: ${SRC_DIR}/s1
+    image: ods-s1:${S1_REF:?fixe o commit do s1}
+    profiles: [cadeia]
+    restart: unless-stopped
+    environment:
+      S1_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+      S1_ZONES_FILE: /artefatos/zones-a5-p3-1.json
+      S1_ZONES_VERSION: zones-a5-p3-1
+    volumes:
+      - ./artefatos:/artefatos:ro
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  p4:
+    # Fonte de vídeo · SIS-2. O repo não tem Dockerfile; este é do P3 (o mesmo do A8).
+    build:
+      context: ${SRC_DIR}/p4
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+              python3-gi gir1.2-gstreamer-1.0 \
+              gstreamer1.0-plugins-base gstreamer1.0-plugins-bad \
+            && rm -rf /var/lib/apt/lists/*
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY src/ src/
+        COPY config/ config/
+        ENV PYTHONPATH=/app:/usr/lib/python3/dist-packages PYTHONUNBUFFERED=1
+        CMD ["sh", "-c", "rm -f /tmp/p4_file_shm; exec python -m src.main"]
+    image: ods-p4:${P4_REF:?fixe o commit do p4}
+    profiles: [video]
+    restart: "no"
+    ipc: shareable
+    environment:
+      P4_SOURCE: file
+      P4_VIDEO_PATH: /videos/cam0.mp4
+      P4_MODO_DIAGNOSTICO: "false"
+      P4_ATIVAR_KAFKA: "true"
+      P4_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+    volumes:
+      - ${VIDEO_DIR}:/videos:ro
+      - p4-shm:/tmp
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  i1:
+    # Detecção · MOD-1. Modelo em I1_ONNX/I1_METADATA (a5.env); CPU (ultralytics).
+    build: ${SRC_DIR}/i1
+    image: ods-i1:${I1_REF:?fixe o commit do i1}
+    profiles: [video]
+    restart: on-failure:5
+    ipc: "service:p4"
+    environment:
+      ODS_KAFKA_BROKER: ${KAFKA_BROKER}
+    # PROVISÓRIO (o mesmo do A8): o run_detector.py (30df178) usa "os" e "BROKER_ENV_VAR" sem
+    # importá-los. Quando a MOD-1 corrigir, volte para ["python3", "I1/run_detector.py", <argumentos>].
+    command: ["python3", "-c",
+              "import builtins, os, runpy, sys; from detector.config import BROKER_ENV_VAR; builtins.os = os; builtins.BROKER_ENV_VAR = BROKER_ENV_VAR; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
+              "--backend", "ultralytics",
+              "--onnx", "${I1_ONNX}", "--metadata", "${I1_METADATA}",
+              "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
+              "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
+    volumes:
+      - p4-shm:/tmp
+      - ${MODELOS_DIR:?defina MODELOS_DIR}:/modelos:ro
+    depends_on: [p4]
+
+
+  aceite:
+    # Teste de aceitação (a5.sh testar): aceite/aceite_a5.py + biblioteca ../comum/aceite.
+    build:
+      context: ../comum/aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1 cryptography==43.0.3
+    image: ods-aceite:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+      A5_ADMIN_SENHA: ${A5_ADMIN_SENHA}
+      VIDEO_SOURCE_ID: file_cam0
+    command: ["python", "-u", "/aceite/aceite_a5.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ../comum/aceite:/comum:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
+
+volumes:
+  a5-dados: {}
+  s3-dados: {}
+  s4-dados: {}
+  p4-shm: {}

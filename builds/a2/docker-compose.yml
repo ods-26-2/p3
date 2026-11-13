@@ -1,0 +1,163 @@
+# ODS — build do A2 · Acesso / identificação (VER-2)
+# Montada a partir do código atual (branch develop do a2 e do i6, 13/11/2026), não só do plano 6c.
+#
+# O que o código do A2 consome hoje:
+#   ods.i6.code_read                      (QR lido pelo I6)
+#   ods.s4.capture.reply, ods.s4.clip     (pede ao S4 o snapshot da entrada, com TESTE_S4=false)
+#
+# Composição:
+#   a2           liberação de catraca (liberar.py) + API de registros (porta 8001) +
+#                monitor das catracas (porta 8000), num container só, como o VER-2 empacotou
+#   a2-cracha    gerador de crachás/QR (web-app do VER-2, porta 8082); o repo não tem Dockerfile:
+#                o deste compose é do P3
+#   i6           leitor de QR. Modo "teste" do VER-2: lê I6_CAMERA_URL (arquivo em laço ou
+#                câmera IP). O modo "P4" do I6 espera um socket TCP que o P4 não oferece.
+#   s4           evidência de mídia, lendo VIDEO_DIR/VIDEO_ARQUIVO
+#
+# Fora, com o motivo:
+#   P4   o I6 não lê o P4 (formato de socket diferente); ver pendências no CLAUDE.md
+#   S3   opcional na 6c e o A2 não publica ods.s3.alert.command
+#
+# Uso (o a2.sh faz tudo isso): ./a2.sh · ./a2.sh status · ./a2.sh parar · ./limpar.sh
+
+name: ods-a2
+
+services:
+
+  a2:
+    build: ${SRC_DIR:?defina SRC_DIR}/a2/A2Local/LiberacaoCatraca
+    image: ods-a2:${A2_REF:?fixe o commit do a2}
+    restart: unless-stopped
+    init: true
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      KAFKA_TOPIC: ods.i6.code_read
+      KAFKA_GROUP_ID: a2-controle-acesso
+      KAFKA_AUTO_OFFSET_RESET: latest
+      KAFKA_DEDUP_TTL: "60"
+      A2_AES_KEY: ${A2_AES_KEY:?defina A2_AES_KEY em a2.secrets.env}
+      A2_SIMULATION: ${A2_SIMULATION:-true}
+      A2_DEFAULT_MAX_PENDING_AGE: "2.0"
+      A2_DATABASE_FILE: /app/data/acessos.db
+      A2_LOG_API_HOST: 0.0.0.0
+      A2_LOG_API_PORT: "8001"
+      A2_LOG_RETENTION_DAYS: "30"
+      TESTE_S4: "false"
+      S4_CAPTURE_COMMAND_TOPIC: ods.s4.capture.command
+      # CONTORNO: o padrão do A2 é ods.s4.capture.command.reply, mas o S4 (be0cad9) responde em
+      # ods.s4.capture.reply, como a 6c manda. Corrigido aqui pela variável que o próprio A2 oferece.
+      S4_CAPTURE_REPLY_TOPIC: ods.s4.capture.reply
+      S4_CLIP_TOPIC: ods.s4.clip
+    volumes:
+      - a2-dados:/app/data
+      - ./config/catracas.json:/app/catracas.json:ro
+      - ./config/configCatraca.json:/app/configCatraca.json:ro
+    ports:
+      # 8000: callback das catracas reais (celular/controladora) · 8001: API de registros
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  a2-cracha:
+    # Gerador de crachás do VER-2 (web-app/). O repo não tem Dockerfile; este é do P3.
+    # O banco SQLite fica dentro da imagem (backend/db/db.db, ao lado do código): recriar o
+    # container volta aos usuários de exemplo. Recado ao VER-2: tornar o caminho configurável.
+    build:
+      context: ${SRC_DIR}/a2/web-app
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+        WORKDIR /app
+        COPY requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY backend/ backend/
+        COPY frontend/ frontend/
+        COPY main.py .
+        CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8080"]
+    image: ods-a2-cracha:${A2_REF}
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da turma. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ods.i6.code_read ods.session.started ods.s4.capture.command
+        ods.s4.capture.reply ods.s4.clip ods.s4.clip.query ods.s4.clip.query.reply; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+  i6:
+    # Leitura de QR · VER-2 (DetectorQR, develop).
+    build: ${SRC_DIR}/i6/DetectorQR
+    image: ods-i6:${I6_REF:?fixe o commit do i6}
+    restart: unless-stopped
+    init: true
+    environment:
+      I6_TEST_MODE: "true"
+      I6_TEST_CAMERAS_JSON: '[{"source_id":"${I6_SOURCE_ID:-cam-portaria}","url":"${I6_CAMERA_URL:-/videos/portaria.mp4}"}]'
+      I6_TEST_RECONNECT_SECONDS: "2.0"
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ods.i6.code_read
+      I6_ARTIFACT_VERSION: i6-qrcode-reader-2.0
+    volumes:
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  s4:
+    # Evidência de mídia · MOD-2. Grava a partir do mesmo arquivo de vídeo. API em 127.0.0.1:18084.
+    build:
+      context: ${SRC_DIR}/s4
+      target: production
+    image: ods-s4:${S4_REF:?fixe o commit do s4}
+    restart: unless-stopped
+    command: ["/app/s4_media_evidence", "--port", "18084", "--db", "/data/s4.db",
+              "--media-dir", "/data/media", "--media-quota-bytes", "${S4_MEDIA_QUOTA_BYTES:-1073741824}"]
+    environment:
+      ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
+      ODS_S4_KAFKA_GROUP_ID: s4-media-evidence-a2
+      ODS_S4_KAFKA_CLIENT_ID: s4
+      ODS_S4_SOURCE: /videos/${VIDEO_ARQUIVO:-portaria.mp4}
+      ODS_S4_FPS: ${VIDEO_FPS:-10}
+    volumes:
+      - s4-dados:/data
+      - ${VIDEO_DIR}:/videos:ro
+    ports:
+      - "127.0.0.1:18084:18084"
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+
+  aceite:
+    # Teste de aceitação (a2.sh testar): aceite/aceite_a2.py + biblioteca ../comum/aceite.
+    build:
+      context: ../comum/aceite
+      dockerfile_inline: |
+        FROM python:3.11-slim-bookworm
+        RUN pip install --no-cache-dir confluent-kafka==2.6.1 cryptography==43.0.3
+    image: ods-aceite:1
+    profiles: [aceite]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    environment:
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      RESULT_DIR: /resultados
+      B4_DIR: /b4
+      A2_AES_KEY: ${A2_AES_KEY}
+      I6_SOURCE_ID: ${I6_SOURCE_ID:-cam-portaria}
+    command: ["python", "-u", "/aceite/aceite_a2.py"]
+    volumes:
+      - ./aceite:/aceite:ro
+      - ../comum/aceite:/comum:ro
+      - ${SRC_DIR}/b4/tests/integration:/b4:ro
+      - ./resultados:/resultados
+
+volumes:
+  a2-dados: {}
+  s4-dados: {}

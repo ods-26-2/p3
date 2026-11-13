@@ -1,0 +1,6 @@
+Configuração das catracas do A2 usada pela build do P3 (exemplo do P3, não do VER-2).
+
+catracas.json       liga a câmera (source_id do I6) à catraca. Tem de bater com I6_SOURCE_ID do a2.env.
+configCatraca.json  catraca simulada, copiada de A2Local/ArquivosMudançaETeste/configCatracaEXEMPLOSIMULACAO.json
+                    do repositório a2 (develop). Para catraca real, troque pelo configCatracaEXEMPLOREAL.json do
+                    VER-2 e ponha A2_SIMULATION=false no a2.env.
