@@ -2,3 +2,4 @@ builds/*/*.secrets.env
 builds/*/resultados/
 temp/
 __pycache__/
+builds/*/.estado-imagens
