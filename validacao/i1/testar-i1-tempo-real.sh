@@ -24,6 +24,10 @@
 #   R02 todos os quadros do vídeo processados       R05 tempo por quadro (p95) < intervalo entre quadros
 #   R03 artifact_version …-fp16 (GPU)               R06 cadeia do A8: quadros do P4 perdidos e atraso
 set -euo pipefail
+# Números com ponto: com locale pt_BR o printf do awk escreve "100,0", e o awk passa a comparar
+# "33.0" com "100,0" como texto (R05 deu AVISO errado na Jetson em 14/11/2026).
+[[ -n "${LC_ALL:-}" ]] && export LC_ALL=C.UTF-8
+export LC_NUMERIC=C
 
 AQUI="$(dirname "$(readlink -f "$0")")"
 P3="$(readlink -f "$AQUI/../..")"

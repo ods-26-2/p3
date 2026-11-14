@@ -23,6 +23,10 @@
 #   G04 inferência na GPU: libnvinfer carregada,       G08 detecções nas fixtures (classes do pacote)
 #       GR3D_FREQ > 0% no tegrastats                   G09 comparação com a CPU (informativo)
 set -euo pipefail
+# Números com ponto: com locale pt_BR o printf do awk escreve "100,0", e o awk passa a comparar
+# "33.0" com "100,0" como texto (R05 deu AVISO errado na Jetson em 14/11/2026).
+[[ -n "${LC_ALL:-}" ]] && export LC_ALL=C.UTF-8
+export LC_NUMERIC=C
 
 AQUI="$(dirname "$(readlink -f "$0")")"
 P3="$(readlink -f "$AQUI/../..")"

@@ -82,4 +82,4 @@ cd /opt/ods/p3/validacao/i1
 
 **Limite da medida:** na parte 1, o `captured_at` é marcado depois de o OpenCV decodificar o quadro na CPU. O "tempo por quadro" não inclui a decodificação; a vazão inclui.
 
-**Validação até agora:** só fora da Jetson, contra `docker`, `tegrastats` e `sudo` simulados, nos casos "acompanha" (alvo 10 quadros/s) e "não acompanha" (150 ms por quadro, alvo 30), e com quadros perdidos na cadeia.
+**Validação:** rodado na Jetson em 14/11/2026 (evidência em [`evidencias/i1-tempo-real-2026-11-14.txt`](evidencias/i1-tempo-real-2026-11-14.txt)): 25 quadros/s com os relógios dinâmicos do modo 25W e 64 quadros/s com `jetson_clocks`. Naquela rodada o R05 saiu errado por causa do locale pt_BR (vírgula decimal); o script já força o ponto.

@@ -1,0 +1,56 @@
+Teste de tempo real do I1 na GPU (validacao/i1/testar-i1-tempo-real.sh) — Jetson ods-pc, 14/11/2026
+Placa: NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super · modo de energia 25W (nvpmodel 1)
+Imagem: ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225 · pacote app-plates/1.0.0 · vídeo /var/lib/ods/videos/cam0.mp4
+Vídeo: 1280x720, 270 quadros a 10.0 quadros/s = 27.0 s de vídeo
+
+NOTA DO P3: nestes três relatórios o R05 saiu errado por um defeito do script (corrigido depois): com
+locale pt_BR o awk comparou "33.0" com "100,0" como texto. Pelo valor real, R05 é PASSOU nos dois
+primeiros (33 ms < 100 ms e 33,0 ms < 33,3 ms). Os números medidos não foram afetados.
+
+===================================================================================================
+1) i1-tempo-real-2026-11-14-151700 — relógios dinâmicos (schedutil), alvo 10 quadros/s, com a cadeia
+===================================================================================================
+  Tempo total: 26.8 s = 16.0 s para subir e carregar a engine + 10.81 s processando
+  Vazão: 25.0 quadros/s (270 quadros em 10.81 s; o vídeo tem 27.0 s)
+  Tempo por quadro (ler → publicar): mediana 32.0 ms · p95 33.0 ms · máximo 212.0 ms
+  Inferência média (só a GPU, medida pelo I1): 24.89 ms
+  GPU: GR3D_FREQ até 99% · detecções: 270
+  Cadeia (sessão 44bc90e2): 234 quadros publicados, frame_index 35 a 269
+  Cadeia: atraso P4 capturou → I1 publicou: mediana 34.0 ms · p95 34.0 ms · máximo 231.0 ms
+  Cadeia: quadros perdidos no meio 1 · no começo (antes do I1 conectar) 35
+
+R01 PASSOU — imagem, engine em /var/lib/ods/engines, runtime nvidia
+R02 PASSOU — 270 de 270 quadros processados, código 0
+R03 PASSOU — artifact_version app-plates-1.0.0-fp16 (TensorRT FP16 na GPU)
+R04 PASSOU — 25.0 quadros/s ≥ 10.0 do alvo: acompanha em tempo real com folga de 2.5×
+R05 AVISO (errado; real: PASSOU) — p95 de 33.0 ms por quadro < 100.0 ms entre quadros
+R06 AVISO — cadeia perdeu 1 quadro(s) no meio e 35 no começo; atraso p95 34.0 ms
+
+===================================================================================================
+2) i1-tempo-real-2026-11-14-151742 — relógios dinâmicos (schedutil), alvo 30 quadros/s
+===================================================================================================
+  Tempo total: 27.9 s = 17.1 s para subir e carregar a engine + 10.82 s processando
+  Vazão: 25.0 quadros/s · tempo por quadro: mediana 32.0 ms · p95 33.0 ms · máximo 212.0 ms
+  Inferência média: 24.97 ms · GR3D_FREQ até 99%
+R04 FALHOU — 25.0 quadros/s < 30 do alvo (0.8×): não acompanha em tempo real
+R05 AVISO (errado; real: PASSOU por pouco) — p95 de 33.0 ms < 33.3 ms entre quadros
+
+Relógios no momento (jetson_clocks --show): CPU 729–1497 MHz de 1728; GPU 306 MHz de 1020;
+EMC 665 MHz de 3199; governor schedutil.
+
+===================================================================================================
+3) i1-tempo-real-2026-11-14-152651 — relógios no máximo (sudo jetson_clocks), alvo 30 quadros/s
+   (estado guardado com --store e restaurado com --restore logo depois)
+===================================================================================================
+  Tempo total: 18.0 s = 13.8 s para subir e carregar a engine + 4.20 s processando
+  Vazão: 64.3 quadros/s (270 quadros em 4.20 s; o vídeo tem 27.0 s)
+  Tempo por quadro (ler → publicar): mediana 11.0 ms · p95 11.0 ms · máximo 281.0 ms
+  Inferência média (só a GPU, medida pelo I1): 8.33 ms
+  GPU: GR3D_FREQ até 53% · detecções: 270
+R01–R05 PASSOU — 64.3 quadros/s ≥ 30: acompanha em tempo real com folga de 2.1×
+
+Resumo: com os relógios dinâmicos do modo 25W o I1 faz 25 quadros/s (acompanha câmera de 10 quadros/s,
+não de 30). Com jetson_clocks faz 64 quadros/s (acompanha 30 com folga de 2,1×) e a inferência cai de
+25 ms para 8,3 ms, igual ao teste isolado da GPU (G04). Na cadeia do A8 (P4 a 10 quadros/s), o atraso
+entre a captura do P4 e a publicação do I1 é de 34 ms, e o I1 perde os primeiros ~3,5 s do vídeo
+(35 quadros) enquanto carrega a engine.

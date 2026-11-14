@@ -204,3 +204,21 @@
 - Resultado: "nenhuma engine em /var/lib/ods/engines", mas a engine existe (o A8 usou). Causa: o p2-build cria a pasta com tempfile.mkdtemp (0700, dona root, src/p2/build/output.py); o usuário ods não lista o conteúdo, e o glob do host falhou.
 - Correção: a conferência da engine roda dentro de um container (root), como o I1. Simulado (com e sem engine). Recado no CLAUDE.md seção 8 (SIS-1/P2).
 - Próximo: usuário roda de novo na Jetson (depois de um ./a8.sh testar, para a parte 2).
+
+### 2026-11-14 15:18 — testar-i1-tempo-real.sh na Jetson (parte 1, pelos logs enviados)
+- i1.log: 270 quadros 1280x720, código 0, todos -fp16, 270 detecções; inferência média 24,97 ms (o G04 isolado deu 8,1 ms).
+- Pelos timestamps: 1º quadro 212 ms (aquecimento); depois ~32 ms da leitura à publicação e um quadro a cada ~39–40 ms → vazão ~25 quadros/s; 270 quadros em ~10,8 s.
+- tegrastats: GPU parada de 15:17:48 a 15:18:04 (~16 s para subir o container e carregar a engine); GR3D 35–99% durante o processamento; CPUs entre 729 e 883 MHz, um núcleo em ~56–60% (thread Python).
+- Conclusão provisória: acompanha câmera de 10 quadros/s (~2,5×); não acompanha 30 quadros/s (~25). Hipótese para a inferência 3× mais lenta que o probe: relógios baixos (modo de energia/jetson_clocks) e custo de CPU no I1. Pedido: relatório .txt (fps do vídeo e parte 2) e `nvpmodel -q` / `jetson_clocks --show`.
+
+### 2026-11-14 15:20 — Relatório R01–R05 (alvo 30) e modo de energia
+- Relatório i1-tempo-real-2026-11-14-151742 (--fps-alvo 30 --sem-cadeia): vídeo 270 quadros a 10 fps = 27 s; total 27,9 s = 17,1 s de partida + 10,82 s; 25,0 quadros/s; p50 32 ms, p95 33 ms, máx 212 ms; inferência 24,97 ms. R04 FALHOU para 30 fps (0,8×); para 10 fps a folga é 2,5×.
+- Energia: nvpmodel 25W (modo 1), governor schedutil, CPU 729–1728 MHz, GPU 306–1020 MHz (estava em 306 MHz parada), EMC 665/3199 MHz. Hipótese: relógios dinâmicos não sobem com a carga intercalada CPU/GPU do I1 (o probe G04, 300 infer seguidos, deu 8 ms).
+- Proposto ao usuário: teste A/B com `jetson_clocks` (guardar com --store, restaurar com --restore). Decisão dele (placa compartilhada). Falta o relatório da 1ª execução (alvo 10, com a parte 2 da cadeia).
+
+### 2026-11-14 15:27 — Teste A/B com jetson_clocks e parte 2 da cadeia
+- jetson_clocks (store/restore feito pelo usuário): 64,3 quadros/s, 11 ms por quadro, inferência 8,33 ms, GR3D até 53% (agora o limite é a CPU). Sem: 25 quadros/s, 32 ms, 24,9 ms.
+- Parte 2 (cadeia, sessão 44bc90e2): 234 publicados, frame_index 35–269; atraso P4→I1 mediana 34 ms; 1 perdido no meio, 35 no começo (I1 carregando a engine enquanto o P4 já toca). Explica a variação 245/260/234 entre testes.
+- Defeito do script: R05 errado por locale pt_BR (awk printf "100,0" comparado como texto). Corrigido nos dois scripts (LC_NUMERIC=C). Simulação local não reproduz o locale (pt_BR não instalado aqui).
+- Arquivos: validacao/i1/evidencias/i1-tempo-real-2026-11-14.txt; README; CLAUDE.md (lição + pendências SIS-1 e MOD-1).
+- Próximo: tags (a8-cadeia-v2 e conferir a8-cadeia-v1) com o usuário.
