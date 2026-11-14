@@ -1,0 +1,22 @@
+Testes do I1 no serviço da build do A8 — 2026-11-14 16:03:16 -0300
+Placa: ods-pc · NVIDIA Jetson Orin Nano Engineering Reference Developer Kit Super
+Serviço: builds/a8 → i1 · imagem ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225
+Configuração usada (do docker compose config):
+  imagem: ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225
+  runtime: nvidia
+  env: ODS_KAFKA_BROKER=172.18.4.56:9093
+  env: P2_BACKEND=trt
+  env: P2_ENGINE_DIR=/opt/ods/engines
+  fora do teste: volume p4-shm → /tmp (memória compartilhada com o P4)
+  volume: /var/lib/ods/engines → /opt/ods/engines:ro
+  fora do teste: ipc service:p4 (precisa do P4 tocando)
+
+S01 PASSOU — imagem ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225 (2.1 GB), commit fixado da develop
+S02 PASSOU — 39 de 40 testes ok; só o test_05 deu erro, esperado: precisa do ultralytics (caminho de CPU), que a imagem Jetson não instala
+S03 PASSOU — código 0, 9 mensagens validadas pelo I1 (schema B1), 9 detecções, artifact_version app-plates-1.0.0-fp16 (TensorRT FP16 na GPU)
+
+Resumo: 3 passou, 0 falhou, 0 aviso
+
+Contexto (P3): S02 = suíte I1/tests do repositório do I1 (develop cb5c381), 40 testes unittest em 5 arquivos
+(test_contract_schema 12, test_error_handling 6, test_session 8, test_p4_ingestion 9, test_i1_sprint3 5).
+Os testes do I1 simulam o P2; o S03 (CMD padrão do Dockerfile.jetson, 9 imagens de fixtures) é o que usa o TensorRT.

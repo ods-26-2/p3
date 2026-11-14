@@ -109,4 +109,4 @@ cd /opt/ods/p3/validacao/i1
 
 **Limite:** os testes do I1 simulam o P2. Só o S03, e os outros testes desta pasta, exercitam o TensorRT de verdade.
 
-**Validação:** a suíte rodou fora da Jetson num ambiente Python 3.10 com os mesmos pacotes da imagem, sem P2/TensorRT: 40 testes, 39 ok, erro só no `test_05` (`No module named 'ultralytics'`). O script foi simulado com um `docker` falso em três casos: o esperado, outra falha, e tudo ok.
+**Validação:** rodado na Jetson em 14/11/2026: S01, S02 (39 de 40, só o `test_05`) e S03 (9 mensagens `-fp16`) passaram. Evidência em [`evidencias/i1-servico-2026-11-14.txt`](evidencias/i1-servico-2026-11-14.txt).

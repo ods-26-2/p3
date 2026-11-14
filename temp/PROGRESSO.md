@@ -240,3 +240,8 @@
 - Itens: S01 imagem = I1_REF; S02 suíte I1/tests (aceita só o erro do test_05/ultralytics); S03 CMD padrão da imagem (fixtures, backend p2): código 0, mensagens, -fp16.
 - Simulado com docker falso (esperado, outra falha, tudo ok). Corrigidos: contagem do unittest pelo resumo final (as linhas "... ok" se misturam com os logs) e grep sem resultado sob set -e.
 - Próximo: usuário roda na Jetson.
+
+### 2026-11-14 16:03 — testar-i1-servico.sh na Jetson: 3 PASSOU
+- S01 imagem cb5c381 (2,1 GB); S02 39/40 (só test_05, ultralytics); S03 CMD padrão: código 0, 9 mensagens, 9 detecções, -fp16.
+- Arquivos: validacao/i1/evidencias/i1-servico-2026-11-14.txt; README; CLAUDE.md seção 6.
+- Próximo: decisão do usuário sobre o sinal verde ao MOD-1 (texto revisto: sem merge na main, + test_05 pular sem ultralytics); teste de resistência do jetson_clocks; tags.
