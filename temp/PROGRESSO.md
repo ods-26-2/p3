@@ -150,3 +150,17 @@
 - Resultado (base l4t-tensorrt:r10.3.0-runtime): G01–G05 PASSOU. TensorRT 10.3.0, p2 0.2.0a1, cuda-python 12.6.2.post1, TrtBackend; engine FP16 compilada em 431 s; libnvinfer carregada; GR3D_FREQ até 90%; 8,12 ms/quadro (p95 11,21; 45,7 MB GPU) × CPU ORT 261,26 ms (32×). Disco 18 -> 16 GB livres (imagem ~2 GB + engine).
 - Defeito do teste: a base da NVIDIA imprime "== CUDA ==" no stdout; N_IMG e META_JSON ficaram poluídos, a checagem Python quebrou calada e G06–G08 sumiram com "0 falhou".
 - Correção: sem_aviso() (docker run --entrypoint "") para ls/cat/test; G02 usa a última linha; checagem das mensagens vira G06 FALHOU se não produzir os 3 itens. Simulado com aviso da NVIDIA e com checagem quebrada.
+
+### 2026-11-14 — A8 de pé após `ods.sh trocar a8`; próximo: `./a8.sh testar` com cam0.mp4
+- Feito: o usuário rodou `./ods.sh trocar a8` na Jetson (~2 h: todas as imagens do A8 reconstruídas, porque o trocar anterior para o A6 tinha apagado as imagens; sem cache por causa do `builder prune -af` por etapa).
+- Ideia em aberto: `ods.sh trocar --manter-imagens` se o disco aguentar (pedido `df -h /` e `docker system df`).
+- Próximo: na Jetson, `./a8.sh status` e `./a8.sh testar` (I7_FONTE=video, P4 toca cam0.mp4, I1 agora na GPU). Se interromper: rodar `./a8.sh testar` de novo (o aceite é recriado com --force-recreate).
+
+### 2026-11-14 17:25 — `./a8.sh testar` com cam0.mp4 na Jetson: resultado esperado
+- Resultado: PASSOU 11 (C01–C08, C11–C13), FALHOU 2 (C14 a 94,7 h, C18 published_at do P4), BLOQUEADO 3 (C10, C16, C17), AVISO 2 (C09, C15). Igual à tabela esperada.
+- Sessão 460bf576: I1 245, I2 245, S1 245 posições, 9 transições, 9 ocupações, 2 janelas do S5; I7 54 leituras (9 placas); A8 real: OVK7900 liberado, demais negado (nao_cadastrado).
+- I1 saiu com "Failed to read from shmsrc / Control socket has closed" no fim do vídeo (conhecido). Avisos NvMap error 12 e Argus no log do I1: a investigar se afetam algo.
+- Não provado ainda: GPU dentro da cadeia. O `tegrastats` mostrado só cobre o período depois do teste (0%); o comando do artifact_version falhou porque `dc` é alias no ~/.bashrc da Jetson (`dc() {` dá syntax error).
+- A8 decide 6× a mesma placa (uma por quadro lido do I7): recado para VER-5 (deduplicar leituras próximas).
+- Arquivos: validacao/a8/evidencias/aceite-a8-20261114-172501.txt; CLAUDE.md seção 5.
+- Próximo: usuário roda a prova de GPU (artifact_version do /app/i1-eventos.jsonl do container i1 + grep do backend no log).

@@ -1,0 +1,101 @@
+Teste de aceitação do A8 — 2026-11-14T17:20:28.996Z  (sessão 460bf576-e164-414b-aa53-7fb8fb203ad3)
+
+C01  PASSOU     Sessão do vídeo (ods.session.started do P4)
+                  460bf576-e164-414b-aa53-7fb8fb203ad3
+C02  PASSOU     Detecções do I1 na sessão
+                  245 mensagem(ns)
+C03  PASSOU     Trilhas do I2 na sessão
+                  245 mensagem(ns)
+C04  PASSOU     Posições do S1 na sessão
+                  245 mensagem(ns)
+C05  PASSOU     Entradas e saídas de vaga (S1)
+                  9 transição(ões) em vaga-1, vaga-2
+C06  PASSOU     Ocupação das vagas (S1)
+                  9 mensagem(ns)
+C07  PASSOU     Métricas por vaga publicadas (S5)
+                  2 janela(s) recebida(s)
+C08  PASSOU     Leituras de placa (I7)
+                  54 leitura(s): MTK6939, OAU0530, ODA4357, ODF4990, ODI9001, OVK7900, OXG8134, OYD7576
+C09  AVISO      Placa ligada ao veículo rastreado (I7 citando detection_id do I1)
+                  o I7 lê imagens soltas, não os quadros do P4; sem detection_id da sessão
+C10  BLOQUEADO  Eventos qualificados (S2)
+                  o S2 ainda não publica no Kafka
+C11  PASSOU     Série de métricas da vaga-1 (ods.s5.metrics.query)
+                  1 janela(s), 1 com movimento
+C12  PASSOU     Mapa de calor em pixels (ods.s5.heatmap.query)
+                  status OK, 5 célula(s) com presença
+C13  PASSOU     Clipe pedido ao S4 (ods.s4.capture.command)
+                  resposta OK e ods.s4.clip 8238737b-20f0-4db1-9f79-556228d765eb (2026-11-18T16:07:50.391Z a 2026-11-18T16:08:00.391Z)
+C14  FALHOU     Data e hora do clipe coerentes com o relógio
+                  end_at 2026-11-18T16:08:00.391Z está a 94.7 h de agora
+C15  AVISO      Descritor do clipe (ods.s4.clip.query)
+                  resposta certa, mas em ods.s4.clip.query.reply; a especificação define ods.s4.clip.reply
+C16  BLOQUEADO  Regras enviadas ao S2 (ods.s2.rules.command)
+                  sem resposta: o S2 ainda não está no Kafka
+C17  BLOQUEADO  Calibração do I3
+                  zonas em pixels; a calibração só entra com zonas em metros e medidas reais
+C18  FALHOU     Envelope 1.0 de todas as mensagens (validador do B4)
+                  ods.session.started: 1/1 (missing envelope field: published_at)
+
+Resumo: PASSOU 11  FALHOU 2  BLOQUEADO 3  AVISO 2
+
+Decisões do A8 real (log do a8-backend desde 2026-11-14T17:20:20Z):
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] OVK7900 (car, confiança 0.9996) câmera cam-entrada -> liberado (veiculo_vinculado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODI9001 (car, confiança 0.9988) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODA4357 (car, confiança 0.9998) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] PPY1001 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OYD7576 (car, confiança 0.9695) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] MTK6939 (car, confiança 0.9999) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OAU0530 (car, confiança 0.9996) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] OXG8134 (car, confiança 0.9992) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+[KAFKA] ODF4990 (car, confiança 0.9995) câmera cam-entrada -> negado (nao_cadastrado)
+
+Contexto (P3): Jetson ods-pc, ./a8.sh testar com I7_FONTE=video (cam0.mp4, 2 quadros/s) e o P4 tocando
+cam0.mp4; I1 = ods-i1-gpu:cb5c381 (Dockerfile.jetson, P2_BACKEND=trt). Contagens acumuladas no Kafka
+depois do teste: session.started 6, i1.detections 397, i2.tracks 347, s1.position 337,
+s1.zone_transition 21, s1.zone_occupancy 22, s5.zone_metrics 2402.
