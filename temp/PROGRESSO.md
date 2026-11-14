@@ -222,3 +222,9 @@
 - Defeito do script: R05 errado por locale pt_BR (awk printf "100,0" comparado como texto). Corrigido nos dois scripts (LC_NUMERIC=C). Simulação local não reproduz o locale (pt_BR não instalado aqui).
 - Arquivos: validacao/i1/evidencias/i1-tempo-real-2026-11-14.txt; README; CLAUDE.md (lição + pendências SIS-1 e MOD-1).
 - Próximo: tags (a8-cadeia-v2 e conferir a8-cadeia-v1) com o usuário.
+
+### 2026-11-14 15:45 — Teste de resistência do jetson_clocks (antes da decisão do usuário)
+- Pedido: o usuário quer saber se a placa aguenta jetson_clocks o tempo todo antes de decidir.
+- Feito: validacao/placa/testar-jetson-clocks.sh + README. Fases base / parado / carga contínua (sonda p2.infer sem pausa, relatório a cada 30 s); tegrastats e ventoinha por fase; J01 temperatura vs. 1º trip passivo (folga ≥ 10 °C), J02 contadores oc*_event_cnt, J03 inferências/s último ≥ 90% do primeiro trecho, J04 Kafka de pé, J05 custo parado. Restaura com --restore no EXIT/INT/TERM.
+- Simulado aqui (fakes + TERMICO falso): normal, quente com queda e sem Kafka, interrompido na fase 2 (restaurou). Corrigido: laço que mantém o sudo segurava o pipe (saída agora em /dev/null).
+- Próximo: usuário roda na Jetson (~40 min) e decide; depois, tags.
