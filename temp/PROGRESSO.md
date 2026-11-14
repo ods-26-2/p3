@@ -2,9 +2,9 @@
 
 ## Estado atual
 - Aplicação em foco: A8 com I1 na GPU (TensorRT via P2), depois A1–A7
-- Fase: I1 em GPU: 1ª tentativa na Jetson gerou imagem de 16,5 GB (base l4t-jetpack) e encheu o disco; base trocada para l4t-tensorrt runtime (14/11), falta rodar de novo
+- Fase: I1 em GPU VALIDADO na Jetson (14/11: G01–G05 passaram, 8,1 ms GPU × 261 ms CPU); G06–G08 não rodaram por defeito do teste (aviso da NVIDIA no stdout), corrigido; falta rodar o teste de novo e subir o A8
 - Último resultado: testar-i1-gpu.sh ok contra docker/tegrastats simulados (sucesso, queda p/ CPU, sem runtime nvidia); compose do A8 checado só por YAML/variáveis
-- Próximo passo: na Jetson: docker image rm ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225; git pull; conferir TensorRT na base l4t-tensorrt (comando na resposta de 14/11); df -h /; cd validacao/i1 && ./testar-i1-gpu.sh; depois cd builds/a8 && ./a8.sh subir && ./a8.sh testar. Se passar: levar o I1 em GPU para A3/A4/A5. Depois: A1–A7 por app (./ods.sh trocar <app> -> validar-sistema.sh -> validar-<app>-fluxo.sh -> ./<app>.sh testar), começando pelo A2.
+- Próximo passo: na Jetson: git pull; cd validacao/i1 && ./testar-i1-gpu.sh (rápido: imagem e engine já existem); copiar o relatório para validacao/i1/evidencias/; depois cd builds/a8 && ./a8.sh subir && ./a8.sh testar. Se passar: levar o I1 em GPU para A3/A4/A5. Depois: A1–A7 por app (./ods.sh trocar <app> -> validar-sistema.sh -> validar-<app>-fluxo.sh -> ./<app>.sh testar), começando pelo A2.
 - Bloqueios / perguntas abertas ao usuário: docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; espaço em disco para a base l4t-jetpack r36.4.0 (vários GB)
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -145,3 +145,8 @@
 - Decisão (contorno do P3, sem editar o I1): BASE_IMAGE=nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime via build arg (I1_BASE_IMAGE no a8.env; args no compose; --build-arg no teste). Teste agora exige MIN_LIVRE_GB + BUILD_GB (4+4) antes de construir, mostra o tamanho da imagem e faz prune também se o build falhar.
 - Validado: bash -n e simulação (build com a base certa, base ausente, pouco disco). Não verificado: se a l4t-tensorrt runtime tem os bindings Python do TensorRT e libcudart (o G02 pega).
 - Recado para MOD-1: trocar a base padrão do Dockerfile.jetson para a l4t-tensorrt runtime.
+
+### 2026-11-14 12:14 — teste do I1 na GPU rodou na Jetson
+- Resultado (base l4t-tensorrt:r10.3.0-runtime): G01–G05 PASSOU. TensorRT 10.3.0, p2 0.2.0a1, cuda-python 12.6.2.post1, TrtBackend; engine FP16 compilada em 431 s; libnvinfer carregada; GR3D_FREQ até 90%; 8,12 ms/quadro (p95 11,21; 45,7 MB GPU) × CPU ORT 261,26 ms (32×). Disco 18 -> 16 GB livres (imagem ~2 GB + engine).
+- Defeito do teste: a base da NVIDIA imprime "== CUDA ==" no stdout; N_IMG e META_JSON ficaram poluídos, a checagem Python quebrou calada e G06–G08 sumiram com "0 falhou".
+- Correção: sem_aviso() (docker run --entrypoint "") para ls/cat/test; G02 usa a última linha; checagem das mensagens vira G06 FALHOU se não produzir os 3 itens. Simulado com aviso da NVIDIA e com checagem quebrada.

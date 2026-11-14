@@ -161,7 +161,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 | `i7` | `i7` | Perfil `i7`, sob demanda: lê imagens de `I7_IMAGENS_DIR` e publica placas |
 | `kafka-topicos` | `cp-kafka` | One-shot: cria os tópicos da cadeia no Kafka da turma (`--if-not-exists`) |
 | `p4` | `p4` + Dockerfile do P3 (`dockerfile_inline`) | Perfil `video`: toca `VIDEO_DIR/cam0.mp4` uma vez (source_id `file_cam0`) e termina |
-| `i1` | `i1` (develop `cb5c381`, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>`, `runtime: nvidia`, `P2_BACKEND=trt`). Ainda não rodado na Jetson (13/11/2026) |
+| `i1` | `i1` (develop `cb5c381`, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>` sobre `l4t-tensorrt:r10.3.0-runtime`, `runtime: nvidia`, `P2_BACKEND=trt`). Teste individual na Jetson em 14/11/2026: 8,1 ms/quadro na GPU × 261 ms na CPU; ainda não rodado dentro do `a8.sh` |
 | `i1-engine` | imagem do `i1` | One-shot (perfil `video`): `builds/comum/i1/preparar-engine.sh` compila a engine FP16 em `I1_ENGINES_DIR` só se ela faltar ou não carregar; o `p4` espera por ele |
 | `i2` | `i2` | Contínuo; consome `ods.i1.detections` |
 | `i3` | `i3` | Perfil `i3`, sob demanda (precisa de CSV de correspondências) |
@@ -220,7 +220,8 @@ cd /opt/ods/p3/builds/a8
 - **O I1 sai com código 1 no fim do vídeo** ("Control socket has closed"). O `restart: on-failure:5` tenta algumas vezes; é esperado.
 - **O S4 esvazia o buffer a cada `ods.session.started`.** Como lê o MP4 só na partida, reinicie o S4 depois de tocar o vídeo do P4. O `a8.sh testar` já faz isso.
 - **O S5 só publica janelas com dados,** e uma vaga fica "ocupada" depois do fim do vídeo, até a próxima sessão.
-- **P2 / TensorRT:** o I1 do A8 passou para a GPU em 13/11/2026 (falta rodar na placa; teste individual em `validacao/i1/testar-i1-gpu.sh`). A3/A4/A5 ainda usam o I1 antigo em CPU; o I7 continua em CPU.
+- **P2 / TensorRT:** o I1 do A8 roda na GPU (teste individual `validacao/i1/testar-i1-gpu.sh` passou na Jetson em 14/11/2026; engine FP16 compila em ~7 min na primeira vez).
+  - As imagens `l4t-*` da NVIDIA imprimem um aviso "== CUDA ==" no stdout de todo container: para ler a saída num script, use `docker run --entrypoint ""` ou só a última linha. A3/A4/A5 ainda usam o I1 antigo em CPU; o I7 continua em CPU.
   - O I1 roda `--backend ultralytics` (ONNX Runtime CPU) e instala `p2[cpu]`; o I7 usa PyTorch CPU.
   - **Base da imagem com TensorRT:** a `l4t-jetpack:r36.4.0` (padrão do `Dockerfile.jetson` do I1) gerou uma imagem de **16,5 GB** e encheu o disco (13/11/2026). Use a `nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime` (4,5 GB, mesmo TensorRT 10.3, já na placa) via `ARG BASE_IMAGE` (`I1_BASE_IMAGE` no `a8.env`). O BuildKit embute a base na imagem: ela não aparece separada no `docker images`.
   - Prova de TensorRT: `artifact_version` terminando em `-fp16`, `libnvinfer` em `/proc/1/maps` do container, `GR3D_FREQ` > 0% no `tegrastats` e `P2_BACKEND=trt`, para impedir a queda silenciosa para CPU.

@@ -80,6 +80,11 @@ checar_disco() {
 }
 
 # Container do I1 na GPU, com a pasta de engines e a pasta de saída do teste.
+# A base da NVIDIA (l4t-*) imprime um aviso "== CUDA ==" no stdout de todo container.
+# Onde a saída é lida pelo script, o container roda sem esse entrypoint (sem_aviso) ou só
+# a última linha é usada.
+sem_aviso() { docker run --rm --entrypoint "" "$IMG" "$@"; }
+
 gpu() {   # gpu <modo das engines: ro|rw> <args do docker run…>
   local modo=$1; shift
   docker run --rm --runtime nvidia \
@@ -167,7 +172,7 @@ import tensorrt
 from p2.api import select_backend
 backend = type(select_backend(os.environ)).__name__
 print("TensorRT", tensorrt.__version__, "· p2", md.version("p2"), "· cuda-python", md.version("cuda-python"), "· backend", backend)
-' 2>"$SAIDA/g02.err"); then
+' 2>"$SAIDA/g02.err" | tail -1); then
   item G02 PASSOU "$VERSOES"
 else
   item G02 FALHOU "TensorRT/P2 não importam na imagem: $(tail -1 "$SAIDA/g02.err")"
@@ -244,8 +249,8 @@ if [[ -n "$IMAGENS" ]]; then
   FONTE=(-v "$IMAGENS:/imagens:ro"); FONTE_C=/imagens; N_IMG=$(find "$IMAGENS" -maxdepth 1 -type f -iregex '.*\.\(jpg\|jpeg\|png\|bmp\|webp\)' | wc -l)
 else
   FONTE=(); FONTE_C="$PACOTE_C/fixtures"
-  docker run --rm "$IMG" test -d "$FONTE_C" || FONTE_C=/app/I1/artifacts/app-plates/1.0.0/fixtures
-  N_IMG=$(docker run --rm "$IMG" sh -c "ls $FONTE_C | grep -ciE '\.(jpg|jpeg|png|bmp|webp)$'")
+  sem_aviso test -d "$FONTE_C" || FONTE_C=/app/I1/artifacts/app-plates/1.0.0/fixtures
+  N_IMG=$(sem_aviso sh -c "ls $FONTE_C | grep -ciE '\.(jpg|jpeg|png|bmp|webp)$'")
 fi
 echo "  $N_IMG imagens em $FONTE_C"
 set +e
@@ -260,9 +265,8 @@ if (( COD == 0 )); then item G05 PASSOU "run_detector.py terminou com código 0"
 else item G05 FALHOU "run_detector.py terminou com código $COD (log em $SAIDA/i1.log)"; fi
 
 etapa "G06–G08 Mensagens publicadas"
-META_JSON=$(docker run --rm "$IMG" cat "$PACOTE_C/metadata.json")
-while IFS='|' read -r cod res txt; do item "$cod" "$res" "$txt"; done < <(
-python3 - "$SAIDA/mensagens.jsonl" "$N_IMG" "$META_JSON" "$SONDA_GPU" <<'PY'
+META_JSON=$(sem_aviso cat "$PACOTE_C/metadata.json")
+CHECAGEM=$(python3 - "$SAIDA/mensagens.jsonl" "$N_IMG" "$META_JSON" "$SONDA_GPU" 2>"$SAIDA/checagem.err" <<'PY'
 import json, sys
 caminho, n_img, meta, sonda = sys.argv[1], int(sys.argv[2]), json.loads(sys.argv[3]), sys.argv[4]
 try:
@@ -300,7 +304,12 @@ elif com < len(msgs):
 else:
     print(f"G08|PASSOU|{resumo}")
 PY
-)
+) || true
+if [[ $(grep -c '^G0[678]|' <<<"$CHECAGEM") -ne 3 ]]; then
+  item G06 FALHOU "a checagem das mensagens não rodou: $(tail -1 "$SAIDA/checagem.err" 2>/dev/null)"
+else
+  while IFS='|' read -r cod res txt; do item "$cod" "$res" "$txt"; done <<<"$CHECAGEM"
+fi
 
 if (( COM_CPU )); then
   etapa "G09 Mesma inferência na CPU (ONNX Runtime do P2), para comparar"
