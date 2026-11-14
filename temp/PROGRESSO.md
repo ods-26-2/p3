@@ -2,9 +2,9 @@
 
 ## Estado atual
 - Aplicação em foco: A8 com I1 na GPU (TensorRT via P2), depois A1–A7
-- Fase: I1 em GPU escrito e commitado (687e0fb); A1–A7 escritos; nada disso rodado na Jetson
+- Fase: I1 em GPU: 1ª tentativa na Jetson gerou imagem de 16,5 GB (base l4t-jetpack) e encheu o disco; base trocada para l4t-tensorrt runtime (14/11), falta rodar de novo
 - Último resultado: testar-i1-gpu.sh ok contra docker/tegrastats simulados (sucesso, queda p/ CPU, sem runtime nvidia); compose do A8 checado só por YAML/variáveis
-- Próximo passo: na Jetson: git pull; df -h /; cd validacao/i1 && ./testar-i1-gpu.sh; depois cd builds/a8 && ./a8.sh subir && ./a8.sh testar. Se passar: levar o I1 em GPU para A3/A4/A5. Depois: A1–A7 por app (./ods.sh trocar <app> -> validar-sistema.sh -> validar-<app>-fluxo.sh -> ./<app>.sh testar), começando pelo A2.
+- Próximo passo: na Jetson: docker image rm ods-i1-gpu:cb5c381193840c1e189032820d971c00d541b225; git pull; conferir TensorRT na base l4t-tensorrt (comando na resposta de 14/11); df -h /; cd validacao/i1 && ./testar-i1-gpu.sh; depois cd builds/a8 && ./a8.sh subir && ./a8.sh testar. Se passar: levar o I1 em GPU para A3/A4/A5. Depois: A1–A7 por app (./ods.sh trocar <app> -> validar-sistema.sh -> validar-<app>-fluxo.sh -> ./<app>.sh testar), começando pelo A2.
 - Bloqueios / perguntas abertas ao usuário: docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; espaço em disco para a base l4t-jetpack r36.4.0 (vários GB)
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -131,3 +131,17 @@
 - Pedido do usuário: commitar progresso e o necessário para continuar em outro computador.
 - Entram no Git: temp/PROGRESSO.md (git add -f), CLAUDE.md, builds/README.md, builds/a1–a5, a7, builds/comum/kafka_override, validacao/a1–a5, a7, validacao/README.md (alteração pendente), faltaA8.md.
 - Conferido antes: sem segredos (secrets.env.exemplo vazios), sem arquivos grandes.
+
+### 2026-11-14 — Jetson: disco com 2 GB livres, a8.sh subir parou na checagem
+- Saída do usuário: `docker build prune -af` (comando errado; o certo é `docker builder prune -af`); `./a8.sh subir` parou em "só 2 GB livres".
+- docker ps -a: A6 de pé (ods-a6-s6-1, ods-a6-a6-1); ods-a6-kafka-topicos-1 é o one-shot de tópicos do A6 (Exited 0), NÃO é broker; broker só o "kafka" da turma (Up 3 days). Também a1-db-1 (outro grupo) e a8-mysql antigo (fora do projeto ods-a8), ambos parados.
+- Suspeita: build do testar-i1-gpu (base l4t-jetpack, vários GB) + cache de build (se o build falhou, o script sai antes do prune) + A6 ainda instalado + ods-i1:30df178 (CPU, sem uso no A8 agora).
+- Resultado do testar-i1-gpu.sh ainda não trazido pelo usuário.
+- Próximo: usuário roda diagnóstico (builder prune certo, docker system df, imagens por tamanho, relatório do teste) e libera espaço (./ods.sh trocar a8 remove o A6).
+
+### 2026-11-14 — resultado na Jetson: imagem de 16,5 GB; troca da base
+- Saída do usuário: ods-i1-gpu:cb5c381 = 16.5GB; disco 18 GB -> 2 GB livres; testar-i1-gpu.sh parou depois do build no checar_disco (só G01 no relatório). Build cache já 0 (o script fez o prune).
+- Na placa já existem nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime (4.48GB), l4t-cuda:12.6.11-runtime e ods/base-gpu (sem TensorRT).
+- Decisão (contorno do P3, sem editar o I1): BASE_IMAGE=nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime via build arg (I1_BASE_IMAGE no a8.env; args no compose; --build-arg no teste). Teste agora exige MIN_LIVRE_GB + BUILD_GB (4+4) antes de construir, mostra o tamanho da imagem e faz prune também se o build falhar.
+- Validado: bash -n e simulação (build com a base certa, base ausente, pouco disco). Não verificado: se a l4t-tensorrt runtime tem os bindings Python do TensorRT e libcudart (o G02 pega).
+- Recado para MOD-1: trocar a base padrão do Dockerfile.jetson para a l4t-tensorrt runtime.

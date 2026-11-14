@@ -11,7 +11,7 @@
 #                                    outro pacote; sem --imagens, usa as fixtures de placas
 #                                    (só prova a GPU, as detecções não significam nada)
 #
-# Lê I1_REF, SRC_DIR e I1_ENGINES_DIR de builds/a8/a8.env (troque com A8_ENV=<arquivo>).
+# Lê I1_REF, SRC_DIR, I1_ENGINES_DIR e I1_BASE_IMAGE de builds/a8/a8.env (troque com A8_ENV=<arquivo>).
 # Constrói a imagem ods-i1-gpu:<I1_REF> se ela não existir (a mesma que o ./a8.sh usa) e
 # compila a engine na primeira vez (minutos).
 # Resultado: validacao/i1/resultados/i1-gpu-<data>.txt (+ .jsonl com as mensagens e logs).
@@ -48,8 +48,11 @@ done
 I1_REF=$(sed -n 's/^I1_REF=//p' "$A8_ENV")
 SRC_DIR=$(sed -n 's/^SRC_DIR=//p' "$A8_ENV")
 I1_ENGINES_DIR=$(sed -n 's/^I1_ENGINES_DIR=//p' "$A8_ENV")
+I1_BASE_IMAGE=$(sed -n 's/^I1_BASE_IMAGE=//p' "$A8_ENV")
+# Espaço extra exigido antes de construir a imagem (além de MIN_LIVRE_GB)
+BUILD_GB=${BUILD_GB:-4}
 [[ "$I1_REF" =~ ^[0-9a-f]{40}$ ]] || { echo "I1_REF inválido em $A8_ENV: '$I1_REF'" >&2; exit 1; }
-: "${SRC_DIR:?SRC_DIR vazio em $A8_ENV}" "${I1_ENGINES_DIR:?I1_ENGINES_DIR vazio em $A8_ENV}"
+: "${SRC_DIR:?SRC_DIR vazio em $A8_ENV}" "${I1_ENGINES_DIR:?I1_ENGINES_DIR vazio em $A8_ENV}" "${I1_BASE_IMAGE:?I1_BASE_IMAGE vazio em $A8_ENV}"
 IMG="ods-i1-gpu:$I1_REF"
 PACOTE_C="/app/I1/artifacts/$PACOTE"
 
@@ -92,6 +95,7 @@ escrever_relatorio() {
   {
     echo "Teste individual do I1 na GPU (TensorRT via P2) — $(date '+%Y-%m-%d %H:%M:%S %z')"
     echo "Placa: $(uname -n) · ${PLACA:-}"
+    echo "Base: $I1_BASE_IMAGE"
     echo "Imagem: $IMG · pacote $PACOTE · imagens ${FONTE_C:-} (${N_IMG:-})"
     echo "Engines: $I1_ENGINES_DIR"
     echo
@@ -139,10 +143,20 @@ echo "  i1 -> $(git -C "$SRC_DIR/i1" log -1 --format='%h %cs %s')"
 if docker image inspect "$IMG" >/dev/null 2>&1; then
   echo "  imagem já existe"
 else
-  echo "  construindo (a base nvcr.io/nvidia/l4t-jetpack:r36.4.0 tem vários GB; log em $SAIDA/build.log)"
-  docker build -f "$SRC_DIR/i1/Dockerfile.jetson" -t "$IMG" "$SRC_DIR/i1" > "$SAIDA/build.log" 2>&1 \
-    || { tail -20 "$SAIDA/build.log"; erro "o build da imagem falhou (log em $SAIDA/build.log)"; }
+  # A base padrão do Dockerfile.jetson (l4t-jetpack) gerou 16,5 GB; usamos a do a8.env.
+  if docker image inspect "$I1_BASE_IMAGE" >/dev/null 2>&1; then
+    echo "  base $I1_BASE_IMAGE já está na placa"
+  else
+    echo "  ${A}!${N} a base $I1_BASE_IMAGE não está na placa e será baixada (vários GB)"
+  fi
+  (( $(livre_gb) >= MIN_LIVRE_GB + BUILD_GB )) \
+    || erro "só $(livre_gb) GB livres; para construir a imagem peço $((MIN_LIVRE_GB + BUILD_GB)) GB (MIN_LIVRE_GB + BUILD_GB)"
+  echo "  construindo sobre $I1_BASE_IMAGE (acompanhe com: tail -f $SAIDA/build.log)"
+  docker build -f "$SRC_DIR/i1/Dockerfile.jetson" --build-arg "BASE_IMAGE=$I1_BASE_IMAGE" \
+    -t "$IMG" "$SRC_DIR/i1" > "$SAIDA/build.log" 2>&1 \
+    || { tail -20 "$SAIDA/build.log"; docker builder prune -af >/dev/null; erro "o build da imagem falhou (log em $SAIDA/build.log)"; }
   docker builder prune -af >/dev/null
+  echo "  imagem pronta: $(docker image inspect -f '{{.Size}}' "$IMG" | awk '{printf "%.1f GB", $1/1e9}')"
   checar_disco
 fi
 

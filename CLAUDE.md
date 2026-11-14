@@ -222,6 +222,7 @@ cd /opt/ods/p3/builds/a8
 - **O S5 só publica janelas com dados,** e uma vaga fica "ocupada" depois do fim do vídeo, até a próxima sessão.
 - **P2 / TensorRT:** o I1 do A8 passou para a GPU em 13/11/2026 (falta rodar na placa; teste individual em `validacao/i1/testar-i1-gpu.sh`). A3/A4/A5 ainda usam o I1 antigo em CPU; o I7 continua em CPU.
   - O I1 roda `--backend ultralytics` (ONNX Runtime CPU) e instala `p2[cpu]`; o I7 usa PyTorch CPU.
+  - **Base da imagem com TensorRT:** a `l4t-jetpack:r36.4.0` (padrão do `Dockerfile.jetson` do I1) gerou uma imagem de **16,5 GB** e encheu o disco (13/11/2026). Use a `nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime` (4,5 GB, mesmo TensorRT 10.3, já na placa) via `ARG BASE_IMAGE` (`I1_BASE_IMAGE` no `a8.env`). O BuildKit embute a base na imagem: ela não aparece separada no `docker images`.
   - Prova de TensorRT: `artifact_version` terminando em `-fp16`, `libnvinfer` em `/proc/1/maps` do container, `GR3D_FREQ` > 0% no `tegrastats` e `P2_BACKEND=trt`, para impedir a queda silenciosa para CPU.
 - **Portas:** o Docker publica em todas as interfaces e passa por cima do `ufw`. As APIs internas (S4, S5) ficam em `127.0.0.1`. Ainda falta saber se 3000 e 8081 aparecem pelo IP público (teste com o celular em dados móveis).
 - **Padrão de nomes do p3** (`image-base-v1/padronizacao/PADRAO-NOMES.md`, formato `ods/<serviço>:<versão>-jp6.2.1-b<ID>`): o usuário decidiu **manter** `ods-<serviço>:<commit>` por enquanto.

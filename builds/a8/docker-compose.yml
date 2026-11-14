@@ -217,7 +217,11 @@ services:
 
   i1:
     # Detecção · MOD-1. Lê os quadros do P4 pela memória compartilhada; GPU (TensorRT via P2).
-    # Imagem do Dockerfile.jetson do I1 (base nvcr.io/nvidia/l4t-jetpack:r36.4.0, p2[trt,cpu]).
+    # Imagem do Dockerfile.jetson do I1 (p2[trt,cpu]).
+    # CONTORNO DO P3: o Dockerfile parte de nvcr.io/nvidia/l4t-jetpack:r36.4.0 (JetPack de
+    # desenvolvimento inteiro), e a imagem ficou com 16,5 GB na Jetson (13/11/2026). Pelo ARG
+    # BASE_IMAGE do próprio Dockerfile, usamos a l4t-tensorrt runtime (mesmo TensorRT 10.3, já
+    # presente na placa). Para desfazer: tire o "args" abaixo.
     # P2_BACKEND=trt: sem TensorRT o P2 dá erro em vez de cair calado para a CPU.
     # Prova de GPU: artifact_version das mensagens termina em "-fp16" (ex.: app-plates-1.0.0-fp16).
     # Para voltar à CPU: build: ${SRC_DIR}/i1 (Dockerfile padrão), image ods-i1:<ref>, sem
@@ -225,6 +229,8 @@ services:
     build:
       context: ${SRC_DIR}/i1
       dockerfile: Dockerfile.jetson
+      args:
+        BASE_IMAGE: ${I1_BASE_IMAGE:?defina I1_BASE_IMAGE}
     image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
     profiles: [video]
     # O I1 ainda sai com código 1 no fim do vídeo ("Control socket has closed"); esperado.
