@@ -164,3 +164,14 @@
 - A8 decide 6× a mesma placa (uma por quadro lido do I7): recado para VER-5 (deduplicar leituras próximas).
 - Arquivos: validacao/a8/evidencias/aceite-a8-20261114-172501.txt; CLAUDE.md seção 5.
 - Próximo: usuário roda a prova de GPU (artifact_version do /app/i1-eventos.jsonl do container i1 + grep do backend no log).
+
+### 2026-11-14 — Prova de GPU do I1 na cadeia do A8
+- Resultado: a última mensagem do I1 (/app/i1-eventos.jsonl do container) tem artifact_version "app-plates-1.0.0-fp16" → as detecções publicadas vieram do TensorRT (P2_BACKEND=trt impede queda para CPU).
+- Problema: às 17:23:01 a criação do contexto TensorRT falhou com OUT_OF_MEMORY (17,6 MB não alocados; Cuda Runtime out of memory; 6 linhas NvMap error 12). O I1 voltou pelo restart on-failure e às 17:23:06 entrou na sessão no frame_index 23. Hipótese: RAM da placa (memória unificada CPU/GPU) cheia com a pilha inteira do A8 + Kafka da turma; quadros iniciais do vídeo podem ter ficado sem detecção.
+- Próximo: pedir RestartCount do container i1, free -h e docker stats para medir a memória; decidir contorno (ex.: limitar memória de serviços pesados, como o frontend Expo, ou esperar o I1 carregar antes do P4 tocar).
+
+### 2026-11-14 — Memória da Jetson e contorno no a8.sh testar
+- Evidência: Orin Nano Super, 7,4 GiB; free 214 MiB, buff/cache 2,7 GiB, available 2,6 GiB, swap 2,2/3,7 GiB em uso. Containers: kafka (turma) 2,0 GiB, a8-mysql 463 MiB, frontend 207 MiB, s5 134 MiB, resto < 80 MiB. RestartCount do i1 = 2.
+- Decisão: `liberar_memoria` no a8.sh (sync + drop_caches via sudo; com terminal pede senha, sem terminal usa sudo -n e só avisa) antes da etapa 3/5 do testar. Simulado aqui com sudo falso (sucesso e falha); bash -n ok; shellcheck não instalado.
+- Não mexido: Kafka da turma (maior consumo, de outro grupo). Sugerido ao usuário avaliar desligar a interface gráfica da placa (decisão de P1/usuário).
+- Próximo: usuário faz push, roda ./a8.sh testar de novo e confere RestartCount do i1 = 0.

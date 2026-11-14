@@ -53,6 +53,24 @@ checar_disco() {
   ok "disco: ${livre} GB livres"
 }
 
+# A Jetson divide a RAM entre CPU e GPU. Com pouca memória livre (o resto em cache de páginas e
+# swap), o TensorRT do I1 falha ao criar o contexto ("NvMap ... error 12", OUT_OF_MEMORY) e só
+# entra depois de reinícios, perdendo os primeiros quadros do vídeo (Jetson, 14/11/2026).
+# Esvaziar o cache de páginas antes de subir o I1 não apaga dados: o kernel só descarta cópias
+# de arquivos que já estão no disco.
+liberar_memoria() {
+  local antes depois
+  antes=$(awk '/^MemFree/ {print int($2/1024)}' /proc/meminfo)
+  local cmd='sync; echo 3 > /proc/sys/vm/drop_caches'
+  if { [[ -t 0 ]] && sudo sh -c "$cmd"; } || sudo -n sh -c "$cmd" 2>/dev/null; then
+    depois=$(awk '/^MemFree/ {print int($2/1024)}' /proc/meminfo)
+    ok "memória livre para a GPU: ${antes} MB → ${depois} MB (cache de páginas esvaziado)"
+  else
+    aviso "memória livre: ${antes} MB. Sem sudo para esvaziar o cache; o I1 pode falhar ao carregar
+  a engine e precisar de reinícios. À mão: sudo sh -c '$cmd'"
+  fi
+}
+
 VOLUME_BANCO=ods-a8_a8-mysql
 # Estado das imagens construídas por este script: serviço, id da imagem e hash da receita.
 ESTADO_IMAGENS=.estado-imagens
@@ -318,6 +336,7 @@ testar() {
   fi
 
   etapa "3/5 Vídeo: P4 tocando e I1 detectando"
+  liberar_memoria
   dc --profile video up -d --force-recreate p4 i1 >/dev/null
   docker wait "$(dc --profile video ps -aq p4)" >/dev/null
   ok "vídeo terminou"
