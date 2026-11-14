@@ -107,7 +107,10 @@ etapa "R01 Conferindo imagem, engine e GPU"
 ok_r01=1
 docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia || { ok_r01=0; motivo="Docker sem runtime nvidia"; }
 docker image inspect "$IMG" >/dev/null 2>&1 || { ok_r01=0; motivo="imagem $IMG não existe (rode ./testar-i1-gpu.sh ou ./a8.sh antes)"; }
-compgen -G "$I1_ENGINES_DIR/*/manifest.json" >/dev/null || { ok_r01=0; motivo="nenhuma engine em $I1_ENGINES_DIR (rode ./testar-i1-gpu.sh antes)"; }
+# O P2 cria a pasta da engine com mkdtemp (0700, dona root): o usuário ods não lista o conteúdo.
+# A conferência roda dentro de um container, como root, igual ao I1.
+[[ "$ok_r01" == 0 ]] || docker run --rm --entrypoint "" -v "$I1_ENGINES_DIR:/e:ro" "$IMG" sh -c 'ls /e/*/manifest.json' >/dev/null 2>&1 \
+  || { ok_r01=0; motivo="nenhuma engine em $I1_ENGINES_DIR (rode ./testar-i1-gpu.sh antes)"; }
 [[ -f "$VIDEO" ]] || { ok_r01=0; motivo="vídeo $VIDEO não existe"; }
 if (( ! ok_r01 )); then item R01 FALHOU "$motivo"; exit 1; fi
 item R01 PASSOU "imagem $IMG, engine em $I1_ENGINES_DIR, runtime nvidia"

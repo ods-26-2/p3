@@ -199,3 +199,8 @@
 - Feito: validacao/i1/testar-i1-tempo-real.sh (R01–R06) + seção no README. Parte 1: I1 no cam0.mp4 o mais rápido possível → tempo total, vazão, tempo por quadro, folga sobre o fps alvo. Parte 2: /app/i1-eventos.jsonl do container i1 do ods-a8 → atraso P4→I1 e quadros perdidos.
 - Validado só aqui: bash -n e simulação (docker/tegrastats/sudo falsos), casos "acompanha", "não acompanha" e cadeia com quadro perdido. Corrigida a colisão da variável N (cor) com a contagem de mensagens.
 - Próximo: usuário roda na Jetson logo depois de um ./a8.sh testar (para a parte 2 ter dados).
+
+### 2026-11-14 15:14 — 1ª execução do testar-i1-tempo-real.sh na Jetson: R01 falso negativo
+- Resultado: "nenhuma engine em /var/lib/ods/engines", mas a engine existe (o A8 usou). Causa: o p2-build cria a pasta com tempfile.mkdtemp (0700, dona root, src/p2/build/output.py); o usuário ods não lista o conteúdo, e o glob do host falhou.
+- Correção: a conferência da engine roda dentro de um container (root), como o I1. Simulado (com e sem engine). Recado no CLAUDE.md seção 8 (SIS-1/P2).
+- Próximo: usuário roda de novo na Jetson (depois de um ./a8.sh testar, para a parte 2).

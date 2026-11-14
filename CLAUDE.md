@@ -297,7 +297,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | SIS-2 (P4) e MOD-2 (S4) | Formato da memória compartilhada (P4 manda cabeçalho `P4R1`, S4 espera quadro puro); envelope do P4 fora da 6c |
 | VER-6 (S1, S2) | S2 no Kafka; S1 não "esvazia" zonas no fim da sessão |
 | VER-5 (A8) | Zonas reais; consumo de S1, S4 e S5 pelo A8; I7 lendo os quadros do P4; usuário não root e frontend estático nos Dockerfiles; decisão de acesso não é gravada (só log); `baixa_confianca` (~26% das leituras) sem fluxo de conferência manual; saída usa a regra da entrada (convidado vencido fica preso); sem filtro por empresa; cancelas fixas no código; a mesma placa lida em quadros seguidos gera uma decisão por leitura (6× por carro no cam0.mp4), sem agrupar |
-| SIS-1 (P2) | Imagem base com TensorRT e engines compilados (`p2-build`) para I1 e I7; SSD NVMe para a placa |
+| SIS-1 (P2) | Imagem base com TensorRT e engines compilados (`p2-build`) para I1 e I7; SSD NVMe para a placa; o `p2-build` cria a pasta da engine com `mkdtemp` (0700, dona root): só root lê, então um container sem root não carregaria a engine e o usuário `ods` não confere a pasta |
 | TRA-1 (B3) | Kafka da turma sem `restart`, sem autenticação, listeners mudando sem aviso, repo `b3` vazio |
 | VER-1 (A1, I8) | A1 consome `ods.industria.defeito_classificado` (6c: `ods.i8.piece_analysis`); I8 sem modelo treinado no repo (a build usa os mocks 2.0 do próprio I8) |
 | VER-2 (A2, I6) | Código novo só na `develop`; web-app com chave AES fixa (`b"a"*32`) e banco dentro do código; padrão `S4_CAPTURE_REPLY_TOPIC` errado (S4 responde em `ods.s4.capture.reply`); I6 espera socket TCP que o P4 não oferece |
