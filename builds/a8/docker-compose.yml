@@ -243,11 +243,21 @@ services:
       P2_ENGINE_DIR: /opt/ods/engines
     # O P2 carrega a engine pelo artifact_id/artifact_version do metadata.json
     # (pasta /opt/ods/engines/app-plates-1.0.0, preparada pelo i1-engine).
-    command: ["python3", "I1/run_detector.py",
-              "--backend", "p2",
-              "--metadata", "/app/I1/artifacts/${I1_PACOTE:?defina I1_PACOTE}/metadata.json",
-              "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
-              "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
+    # CONTORNO DO P3: o "depends_on: service_started" só garante que o container do P4 subiu,
+    # não que o socket dos quadros já existe. Sem esperar, o I1 caía com "Não foi possível
+    # iniciar a pipeline P4", reiniciava e perdia os primeiros segundos do vídeo (Jetson,
+    # 14/11/2026). O P4 apaga o socket velho ao partir, então o que aparece aqui é o da sessão
+    # nova. Espera até 60 s; depois segue e o erro do I1 aparece como antes.
+    # Para desfazer: deixe só o comando python3 a partir do "exec".
+    command:
+      - sh
+      - -c
+      - >-
+        i=0; while [ ! -S /tmp/p4_file_shm ] && [ $$i -lt 120 ]; do sleep 0.5; i=$$((i+1)); done;
+        exec python3 I1/run_detector.py --backend p2
+        --metadata /app/I1/artifacts/${I1_PACOTE:?defina I1_PACOTE}/metadata.json
+        --source p4_file --max-frames 1000000 --conf 0.50
+        --mode kafka --output-jsonl /app/i1-eventos.jsonl
     volumes:
       - p4-shm:/tmp
       - ${I1_ENGINES_DIR:?defina I1_ENGINES_DIR}:/opt/ods/engines:ro

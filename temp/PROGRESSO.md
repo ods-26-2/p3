@@ -175,3 +175,14 @@
 - Decisão: `liberar_memoria` no a8.sh (sync + drop_caches via sudo; com terminal pede senha, sem terminal usa sudo -n e só avisa) antes da etapa 3/5 do testar. Simulado aqui com sudo falso (sucesso e falha); bash -n ok; shellcheck não instalado.
 - Não mexido: Kafka da turma (maior consumo, de outro grupo). Sugerido ao usuário avaliar desligar a interface gráfica da placa (decisão de P1/usuário).
 - Próximo: usuário faz push, roda ./a8.sh testar de novo e confere RestartCount do i1 = 0.
+
+### 2026-11-14 17:43 — 2º `./a8.sh testar` (com liberar_memoria): mesmo resumo, i1 ainda com 2 reinícios
+- Resultado: PASSOU 11 FALHOU 2 BLOQUEADO 3 AVISO 2; sessão 5205e9fc: I1/I2/S1 260 (antes 245), 9 transições, 10 ocupações, 8 janelas S5.
+- RestartCount do i1 = 2 de novo. Hipótese nova: nem todo reinício é OOM; o I1 sai com código 1 no fim do vídeo ("Control socket has closed") e o restart on-failure o religa, o que também conta. Pedida linha do tempo do log (com timestamps) e a saída do liberar_memoria.
+
+### 2026-11-14 — Linha do tempo do I1 no 2º teste: memória resolvida, sobrou a corrida com o P4
+- liberar_memoria: ~500 MB → ~2000 MB livres; nenhum OUT_OF_MEMORY no log.
+- Reinício 1 (17:41:38): "Não foi possível iniciar a pipeline P4" — o I1 partiu antes do P4 criar /tmp/p4_file_shm (depends_on service_started não garante o socket). Entrou na sessão às 17:41:41.
+- Reinício 2 (17:42:07): fim do vídeo, "Control socket has closed", código 1 (pendência MOD-1, conhecida).
+- Contorno no compose do A8: comando do i1 via sh espera o socket (até 60 s) e faz exec do run_detector. Testado aqui com sh e socket unix real (com e sem socket). Sem docker compose local (daemon sem permissão), então `config` não foi rodado. Não muda o hash da receita (só o "build" entra): sem rebuild.
+- Próximo: push; na Jetson `./a8.sh testar` e linha do tempo do log; esperado RestartCount 1 (só o do fim do vídeo).
