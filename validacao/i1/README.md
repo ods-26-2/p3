@@ -83,3 +83,30 @@ cd /opt/ods/p3/validacao/i1
 **Limite da medida:** na parte 1, o `captured_at` é marcado depois de o OpenCV decodificar o quadro na CPU. O "tempo por quadro" não inclui a decodificação; a vazão inclui.
 
 **Validação:** rodado na Jetson em 14/11/2026 (evidência em [`evidencias/i1-tempo-real-2026-11-14.txt`](evidencias/i1-tempo-real-2026-11-14.txt)): 25 quadros/s com os relógios dinâmicos do modo 25W e 64 quadros/s com `jetson_clocks`. Naquela rodada o R05 saiu errado por causa do locale pt_BR (vírgula decimal); o script já força o ponto.
+
+# Testes do próprio I1 no serviço da build (`testar-i1-servico.sh`)
+
+Roda a suíte de testes do repositório do I1 (`I1/tests`, 40 testes `unittest`) e o comando padrão da imagem **dentro do mesmo serviço que o `./a8.sh` sobe.**
+
+A definição vem do `docker compose config` do `builds/a8`:
+- mesma imagem `ods-i1-gpu:<I1_REF>`, da `develop`;
+- runtime `nvidia`;
+- mesmas variáveis (`P2_BACKEND=trt`, `P2_ENGINE_DIR`, `ODS_KAFKA_BROKER`);
+- mesma pasta de engines.
+
+Só ficam de fora o `ipc: service:p4` e a memória compartilhada em `/tmp`, que exigem o P4 tocando vídeo. Nada é publicado no Kafka.
+
+```bash
+cd /opt/ods/p3/validacao/i1
+./testar-i1-servico.sh
+```
+
+| Item | Confirma |
+|---|---|
+| S01 | A imagem do serviço existe e é a do commit fixado (`I1_REF`) |
+| S02 | A suíte do I1 passa dentro do serviço. O `test_05` (Degrau A pelo caminho de CPU) precisa do `ultralytics`, que a imagem Jetson não instala; esse erro é esperado e aceito, qualquer outro falha o item |
+| S03 | O comando padrão da imagem (`CMD` do `Dockerfile.jetson`: `run_detector` nas fixtures, backend `p2`) termina com código 0, publica mensagens validadas pelo I1 e tem `artifact_version` terminando em `-fp16` (GPU) |
+
+**Limite:** os testes do I1 simulam o P2. Só o S03, e os outros testes desta pasta, exercitam o TensorRT de verdade.
+
+**Validação:** a suíte rodou fora da Jetson num ambiente Python 3.10 com os mesmos pacotes da imagem, sem P2/TensorRT: 40 testes, 39 ok, erro só no `test_05` (`No module named 'ultralytics'`). O script foi simulado com um `docker` falso em três casos: o esperado, outra falha, e tudo ok.

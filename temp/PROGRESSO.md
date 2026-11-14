@@ -234,3 +234,9 @@
 - Testes do I1 (cb5c381): 5 suítes unittest em I1/tests (contrato/schema B1, tratamento de erros, sessão e sequência, ingestão P4, auditoria sprint 3) + CI .github/workflows/i1-tests.yml (ubuntu, CPU). Estão dentro da imagem Jetson (COPY I1/, schemas/ copiado, .dockerignore não exclui).
 - Rodado aqui (venv Python 3.10 com os mesmos pacotes da imagem, sem p2/TensorRT): 40 testes, 39 ok, 1 erro: test_05_t16 (Degrau A com ONNX real) importa ultralytics, que a imagem Jetson não tem. Nenhum teste deles usa a GPU de verdade: o P2 é sempre simulado (FakeP2Module/MockP2Backend).
 - Próximo: usuário roda a suíte dentro de ods-i1-gpu:cb5c381 na Jetson e manda a saída.
+
+### 2026-11-14 16:05 — testar-i1-servico.sh (testes do I1 no serviço exato da build)
+- Pedido: rodar os testes do I1 no "exato serviço da Jetson". `docker compose run i1` não serve (ipc: service:p4 exige o P4 rodando); o script lê o serviço i1 do `docker compose config` do builds/a8 e roda `docker run` com a mesma imagem, runtime, env e volumes (sem ipc e /tmp do P4).
+- Itens: S01 imagem = I1_REF; S02 suíte I1/tests (aceita só o erro do test_05/ultralytics); S03 CMD padrão da imagem (fixtures, backend p2): código 0, mensagens, -fp16.
+- Simulado com docker falso (esperado, outra falha, tudo ok). Corrigidos: contagem do unittest pelo resumo final (as linhas "... ok" se misturam com os logs) e grep sem resultado sob set -e.
+- Próximo: usuário roda na Jetson.
