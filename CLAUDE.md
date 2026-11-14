@@ -161,7 +161,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 | `i7` | `i7` | Perfil `i7`, sob demanda: lê imagens de `I7_IMAGENS_DIR` e publica placas |
 | `kafka-topicos` | `cp-kafka` | One-shot: cria os tópicos da cadeia no Kafka da turma (`--if-not-exists`) |
 | `p4` | `p4` + Dockerfile do P3 (`dockerfile_inline`) | Perfil `video`: toca `VIDEO_DIR/cam0.mp4` uma vez (source_id `file_cam0`) e termina |
-| `i1` | `i1` (develop `cb5c381`, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>` sobre `l4t-tensorrt:r10.3.0-runtime`, `runtime: nvidia`, `P2_BACKEND=trt`). Teste individual na Jetson em 14/11/2026: 8,1 ms/quadro na GPU × 261 ms na CPU. Dentro do `a8.sh testar` (14/11/2026): 245 detecções na sessão; falta a prova de GPU na cadeia (`artifact_version` -fp16 do container) |
+| `i1` | `i1` (develop `cb5c381`, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>` sobre `l4t-tensorrt:r10.3.0-runtime`, `runtime: nvidia`, `P2_BACKEND=trt`). Teste individual na Jetson em 14/11/2026: 8,1 ms/quadro na GPU × 261 ms na CPU. Dentro do `a8.sh testar` (14/11/2026): 245 detecções na sessão; `artifact_version` `app-plates-1.0.0-fp16` conferido no container |
 | `i1-engine` | imagem do `i1` | One-shot (perfil `video`): `builds/comum/i1/preparar-engine.sh` compila a engine FP16 em `I1_ENGINES_DIR` só se ela faltar ou não carregar; o `p4` espera por ele |
 | `i2` | `i2` | Contínuo; consome `ods.i1.detections` |
 | `i3` | `i3` | Perfil `i3`, sob demanda (precisa de CSV de correspondências) |
@@ -188,7 +188,7 @@ cd /opt/ods/p3/builds/a8
 - **A8:** o I7 → Kafka → A8 decidiu `liberado (veiculo_vinculado)` e `negado (nao_cadastrado)`.
 - **Script de validação da API:** `validacao/a8/validar-a8-fluxo.sh` passou.
 
-**Rodado na Jetson em 14/11/2026:** `./ods.sh trocar a8` (~2 h, todas as imagens reconstruídas) e `./a8.sh testar` com o `cam0.mp4`: PASSOU 11, FALHOU 2 (C14, C18), BLOQUEADO 3, AVISO 2, como esperado. Evidência: `validacao/a8/evidencias/aceite-a8-20261114-172501.txt`.
+**Rodado na Jetson em 14/11/2026:** `./ods.sh trocar a8` (~2 h, todas as imagens reconstruídas) e `./a8.sh testar` com o `cam0.mp4`: PASSOU 11, FALHOU 2 (C14, C18), BLOQUEADO 3, AVISO 2, como esperado. Evidências: `validacao/a8/evidencias/aceite-a8-20261114-172501.txt` (1º teste) e `aceite-a8-20261114-175800.txt` (com os contornos de memória e de partida do I1: 1 reinício, só o do fim do vídeo).
 
 ### Resultado esperado do teste de aceitação hoje
 
@@ -296,7 +296,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | MOD-2 (S4) | Data dos clipes soma o uptime; tópico de resposta `ods.s4.clip.query.reply` (spec: `ods.s4.clip.reply`) |
 | SIS-2 (P4) e MOD-2 (S4) | Formato da memória compartilhada (P4 manda cabeçalho `P4R1`, S4 espera quadro puro); envelope do P4 fora da 6c |
 | VER-6 (S1, S2) | S2 no Kafka; S1 não "esvazia" zonas no fim da sessão |
-| VER-5 (A8) | Zonas reais; consumo de S1, S4 e S5 pelo A8; I7 lendo os quadros do P4; usuário não root e frontend estático nos Dockerfiles; decisão de acesso não é gravada (só log); `baixa_confianca` (~26% das leituras) sem fluxo de conferência manual; saída usa a regra da entrada (convidado vencido fica preso); sem filtro por empresa; cancelas fixas no código |
+| VER-5 (A8) | Zonas reais; consumo de S1, S4 e S5 pelo A8; I7 lendo os quadros do P4; usuário não root e frontend estático nos Dockerfiles; decisão de acesso não é gravada (só log); `baixa_confianca` (~26% das leituras) sem fluxo de conferência manual; saída usa a regra da entrada (convidado vencido fica preso); sem filtro por empresa; cancelas fixas no código; a mesma placa lida em quadros seguidos gera uma decisão por leitura (6× por carro no cam0.mp4), sem agrupar |
 | SIS-1 (P2) | Imagem base com TensorRT e engines compilados (`p2-build`) para I1 e I7; SSD NVMe para a placa |
 | TRA-1 (B3) | Kafka da turma sem `restart`, sem autenticação, listeners mudando sem aviso, repo `b3` vazio |
 | VER-1 (A1, I8) | A1 consome `ods.industria.defeito_classificado` (6c: `ods.i8.piece_analysis`); I8 sem modelo treinado no repo (a build usa os mocks 2.0 do próprio I8) |

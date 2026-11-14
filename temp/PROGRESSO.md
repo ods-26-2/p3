@@ -186,3 +186,10 @@
 - Reinício 2 (17:42:07): fim do vídeo, "Control socket has closed", código 1 (pendência MOD-1, conhecida).
 - Contorno no compose do A8: comando do i1 via sh espera o socket (até 60 s) e faz exec do run_detector. Testado aqui com sh e socket unix real (com e sem socket). Sem docker compose local (daemon sem permissão), então `config` não foi rodado. Não muda o hash da receita (só o "build" entra): sem rebuild.
 - Próximo: push; na Jetson `./a8.sh testar` e linha do tempo do log; esperado RestartCount 1 (só o do fim do vídeo).
+
+### 2026-11-14 17:58 — 3º `./a8.sh testar`: contornos do I1 confirmados na Jetson
+- Resultado: PASSOU 11 FALHOU 2 BLOQUEADO 3 AVISO 2 (igual ao esperado). Sessão 44bc90e2: I1/I2/S1 234, 9 transições, 10 ocupações, 7 janelas S5, 54 leituras I7.
+- i1: RestartCount 1 (só o do fim do vídeo); sem OUT_OF_MEMORY, sem falha de partida. Contornos a647563 (drop_caches) e e242f16 (espera do socket) validados na placa.
+- Detecções por sessão variam entre execuções (245, 260, 234): anotado, não investigado.
+- Arquivos: validacao/a8/evidencias/aceite-a8-20261114-175800.txt; CLAUDE.md (seção 5 e VER-5: decisão repetida por leitura).
+- Próximo: propor tag a8-cadeia-v2 (cadeia com I1 na GPU) ao usuário; depois levar o I1 GPU para A3/A4/A5 ou validar A2 na Jetson.
