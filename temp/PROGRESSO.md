@@ -228,3 +228,9 @@
 - Feito: validacao/placa/testar-jetson-clocks.sh + README. Fases base / parado / carga contínua (sonda p2.infer sem pausa, relatório a cada 30 s); tegrastats e ventoinha por fase; J01 temperatura vs. 1º trip passivo (folga ≥ 10 °C), J02 contadores oc*_event_cnt, J03 inferências/s último ≥ 90% do primeiro trecho, J04 Kafka de pé, J05 custo parado. Restaura com --restore no EXIT/INT/TERM.
 - Simulado aqui (fakes + TERMICO falso): normal, quente com queda e sem Kafka, interrompido na fase 2 (restaurou). Corrigido: laço que mantém o sudo segurava o pipe (saída agora em /dev/null).
 - Próximo: usuário roda na Jetson (~40 min) e decide; depois, tags.
+
+### 2026-11-14 16:00 — Testes do próprio repositório do I1; regra: I1 sempre na develop
+- Usuário: "Use sempre develop como branch base para i1". Registrado na memória, no CLAUDE.md (seção 2 e pendência MOD-1 sem "merge na main") e no comentário do a8.env. HEAD da origin/develop = cb5c381 (já é o fixado).
+- Testes do I1 (cb5c381): 5 suítes unittest em I1/tests (contrato/schema B1, tratamento de erros, sessão e sequência, ingestão P4, auditoria sprint 3) + CI .github/workflows/i1-tests.yml (ubuntu, CPU). Estão dentro da imagem Jetson (COPY I1/, schemas/ copiado, .dockerignore não exclui).
+- Rodado aqui (venv Python 3.10 com os mesmos pacotes da imagem, sem p2/TensorRT): 40 testes, 39 ok, 1 erro: test_05_t16 (Degrau A com ONNX real) importa ultralytics, que a imagem Jetson não tem. Nenhum teste deles usa a GPU de verdade: o P2 é sempre simulado (FakeP2Module/MockP2Backend).
+- Próximo: usuário roda a suíte dentro de ods-i1-gpu:cb5c381 na Jetson e manda a saída.

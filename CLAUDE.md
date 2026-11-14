@@ -70,7 +70,7 @@ builds/<app>/                      ex.: builds/a8/
   - **Frentes transversais:** B1 contratos e validador (TRA-1), B2 tempo e replay (TRA-2), B3 barramento (TRA-1), B4 testes de integração (TRA-2), B5 modelos e artefatos (MOD-1), B6 interface (MOD-2).
 - **Papel do P3, segundo o plano:** *"P3, pertencente ao SIS-1, define a composição, a build e o ciclo de vida por aplicação. Os squads donos fornecem componentes e artefatos versionados. O squad da aplicação seleciona versões e parâmetros. B1, B3 e B4 fornecem contratos, padrões de integração e verificação."* O P3 também empacota os serviços em container.
 - **Código:** um repositório por componente em `https://github.com/ods-26-2/<id>` (`p4`, `i1`, `s5`, `a8`…), todos públicos.
-  - **Branches:** a maioria só tem `main`. O S4 usa `master`, e o S2 tem a versão mais nova em `develop`.
+  - **Branches:** a maioria só tem `main`. O S4 usa `master`, o S2 tem a versão mais nova em `develop`, e o **I1 usa sempre a `develop` como base** (decisão do usuário, 14/11/2026).
   - **Sem CI de imagens:** as imagens são **construídas na própria Jetson**, a partir dos clones, no commit fixado.
 - **Barramento:** Kafka. O Guia de Uso do Kafka (TRA-1) **proíbe broker paralelo**: toda build usa o Kafka compartilhado da turma. O repositório `b3` está vazio, e não há configuração do broker versionada.
 
@@ -293,7 +293,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 
 | Equipe | Pendência |
 |---|---|
-| MOD-1 (I1) | Imports corrigidos e `Dockerfile.jetson` só na `develop` (`cb5c381`): fazer o merge no `main`; tratar o fechamento do socket do P4 como fim normal (código 0); o P4 começa a tocar sem esperar o I1 carregar a engine (perde ~35 quadros no início): combinar com a SIS-2 um sinal de "pronto" ou o P4 esperar o consumidor |
+| MOD-1 (I1) | Tratar o fechamento do socket do P4 como fim normal (código 0); o P4 começa a tocar sem esperar o I1 carregar a engine (perde ~35 quadros no início): combinar com a SIS-2 um sinal de "pronto" ou o P4 esperar o consumidor |
 | MOD-2 (S4) | Data dos clipes soma o uptime; tópico de resposta `ods.s4.clip.query.reply` (spec: `ods.s4.clip.reply`) |
 | SIS-2 (P4) e MOD-2 (S4) | Formato da memória compartilhada (P4 manda cabeçalho `P4R1`, S4 espera quadro puro); envelope do P4 fora da 6c |
 | VER-6 (S1, S2) | S2 no Kafka; S1 não "esvazia" zonas no fim da sessão |
