@@ -193,3 +193,9 @@
 - Detecções por sessão variam entre execuções (245, 260, 234): anotado, não investigado.
 - Arquivos: validacao/a8/evidencias/aceite-a8-20261114-175800.txt; CLAUDE.md (seção 5 e VER-5: decisão repetida por leitura).
 - Próximo: propor tag a8-cadeia-v2 (cadeia com I1 na GPU) ao usuário; depois levar o I1 GPU para A3/A4/A5 ou validar A2 na Jetson.
+
+### 2026-11-14 — Teste de tempo real do I1 (pedido antes de marcar a tag)
+- Levantamento: o repo do I1 (cb5c381) só tem testes unitários com mock (I1/tests; latência 6,45 ms fixa no MockP2Backend). O run_detector lê MP4 direto (OpenCV, sem ritmo) e imprime a inferência média; cada mensagem tem captured_at e published_at, e o jsonl é aberto com "w".
+- Feito: validacao/i1/testar-i1-tempo-real.sh (R01–R06) + seção no README. Parte 1: I1 no cam0.mp4 o mais rápido possível → tempo total, vazão, tempo por quadro, folga sobre o fps alvo. Parte 2: /app/i1-eventos.jsonl do container i1 do ods-a8 → atraso P4→I1 e quadros perdidos.
+- Validado só aqui: bash -n e simulação (docker/tegrastats/sudo falsos), casos "acompanha", "não acompanha" e cadeia com quadro perdido. Corrigida a colisão da variável N (cor) com a contagem de mensagens.
+- Próximo: usuário roda na Jetson logo depois de um ./a8.sh testar (para a parte 2 ter dados).

@@ -44,3 +44,42 @@ cd /opt/ods/p3/validacao/i1
 - O script termina com código 1 se algum item falhar.
 
 **Validação até agora:** o teste rodou só fora da Jetson, contra um `docker` e um `tegrastats` simulados, nos caminhos de sucesso, de queda para a CPU (`-fp32` e GPU parada) e de placa sem runtime `nvidia`.
+
+# Teste de tempo real do I1 (`testar-i1-tempo-real.sh`)
+
+Responde a duas perguntas: **quanto tempo o I1 leva** para analisar um vídeo, e **se ele acompanha a câmera em tempo real.**
+
+O repositório do I1 só tem testes unitários (`I1/tests/`). Eles rodam com um P2 simulado, e a latência que registram (6,45 ms) é um número fixo do mock, não uma medição.
+
+```bash
+cd /opt/ods/p3/validacao/i1
+./testar-i1-tempo-real.sh                      # cam0.mp4 do a8.env, alvo = fps do vídeo
+./testar-i1-tempo-real.sh --fps-alvo 30        # compara com uma câmera de 30 quadros/s
+./testar-i1-tempo-real.sh --video /var/lib/ods/videos/outro.mp4 --sem-cadeia
+```
+
+**Pré-requisito:** a imagem `ods-i1-gpu:<I1_REF>` e a engine já existem (`./testar-i1-gpu.sh` ou `./a8.sh`). Este teste não constrói nada nem publica no Kafka.
+
+**Parte 1 — capacidade:**
+- O I1 lê o MP4 direto do arquivo, o mais rápido que consegue.
+- Mede o tempo total (subir o container e carregar a engine, mais o processamento).
+- Calcula a vazão, em quadros/s, e o tempo por quadro, da leitura à publicação (mediana, p95 e máximo).
+- Registra a inferência média, informada pelo I1, e o `GR3D_FREQ` máximo.
+- Se a vazão é maior que o fps da câmera, o I1 acompanha em tempo real. A folga diz quantas vezes sobra.
+
+**Parte 2 — no ritmo real:** usa a última execução do `./a8.sh testar`. Lê as mensagens que o I1 da cadeia gravou e mede:
+- o atraso entre o P4 capturar o quadro e o I1 publicar;
+- quantos quadros o I1 não chegou a ver, no começo (antes de conectar) e no meio.
+
+| Item | Confirma |
+|---|---|
+| R01 | Imagem, engine, vídeo e runtime `nvidia` presentes |
+| R02 | Todos os quadros do vídeo processados (tolerância de 1% na contagem do OpenCV), código 0 |
+| R03 | `artifact_version` termina em `-fp16`: rodou no TensorRT |
+| R04 | Vazão ≥ fps alvo: acompanha em tempo real (FALHOU se não acompanha) |
+| R05 | p95 do tempo por quadro < intervalo entre quadros (AVISO se não) |
+| R06 | Cadeia do A8: nenhum quadro perdido no meio e até 5 no começo (AVISO se não) |
+
+**Limite da medida:** na parte 1, o `captured_at` é marcado depois de o OpenCV decodificar o quadro na CPU. O "tempo por quadro" não inclui a decodificação; a vazão inclui.
+
+**Validação até agora:** só fora da Jetson, contra `docker`, `tegrastats` e `sudo` simulados, nos casos "acompanha" (alvo 10 quadros/s) e "não acompanha" (150 ms por quadro, alvo 30), e com quadros perdidos na cadeia.
