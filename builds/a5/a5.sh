@@ -71,6 +71,55 @@ tocar_video() {
   ok "vídeo terminou ($VIDEO_ARQUIVO, source_id $VIDEO_SOURCE_ID)"
 }
 
+# ---------------------------------------------------------------- permissões do S3
+
+PERMISSOES_S3=estado/permissoes-s3.json
+
+# O arquivo precisa existir antes do "up": se faltar, o Docker cria uma PASTA no lugar.
+garantir_permissoes_s3() {
+  mkdir -p estado
+  [[ -f "$PERMISSOES_S3" ]] && return 0
+  cp config/permissoes-s3.exemplo.json "$PERMISSOES_S3"
+  ok "permissões do S3 criadas do exemplo (só o administrador)"
+}
+
+# Baixa do A5 quem pode reconhecer/silenciar/fechar alertas e, se mudou, regrava o arquivo e
+# reinicia o S3 (que só lê na partida). Papéis sem usuários entram em "members" com lista vazia:
+# sem isso o S3 recusa o arquivo ("role:operador não está em members").
+atualizar_permissoes_s3() {
+  local senha novo
+  senha=$(grep -E '^A5_ADMIN_SENHA=' a5.secrets.env | cut -d= -f2-)
+  novo=$(A5_SENHA="$senha" python3 - <<'PY'
+import json, os, urllib.request
+base = "http://127.0.0.1:8000"
+def pedir(metodo, caminho, corpo=None, token=None):
+    req = urllib.request.Request(base + caminho, method=metodo,
+                                 data=json.dumps(corpo).encode() if corpo is not None else None)
+    req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.load(r)
+token = pedir("POST", "/auth/login", {"id": "administrador", "senha": os.environ["A5_SENHA"]})["token"]
+d = pedir("GET", "/integracoes/s3/permissoes", token=token)
+membros = d.setdefault("members", {})
+for quem in d.get("actions", {}).values():
+    for item in quem:
+        if item.startswith(("role:", "group:")):
+            membros.setdefault(item, [])
+print(json.dumps(d, ensure_ascii=False, indent=2))
+PY
+  ) || { aviso "não consegui baixar as permissões do S3 pelo A5; o S3 segue com $PERMISSOES_S3"; return 0; }
+  if [[ "$novo" == "$(cat "$PERMISSOES_S3")" ]]; then
+    ok "permissões do S3 em dia com o A5"
+    return 0
+  fi
+  # Regrava no mesmo arquivo (mesmo inode): o bind mount do S3 enxerga a mudança.
+  printf '%s\n' "$novo" > "$PERMISSOES_S3"
+  dc restart s3 >/dev/null
+  ok "permissões do S3 atualizadas pelo A5 e S3 reiniciado"
+}
+
 # ---------------------------------------------------------------- ganchos da lib
 
 checar_entradas() {
@@ -79,6 +128,7 @@ checar_entradas() {
   local senha
   senha=$(grep -E '^A5_ADMIN_SENHA=' a5.secrets.env | cut -d= -f2-)
   (( ${#senha} >= 4 )) || erro "A5_ADMIN_SENHA em a5.secrets.env precisa de pelo menos 4 caracteres (tem ${#senha})"
+  garantir_permissoes_s3
   checar_gpu
   checar_pasta_engines
   entrada_arquivo "$VIDEO_DIR/$VIDEO_ARQUIVO" "vídeo de EPI (pessoas com/sem capacete e colete)" \
@@ -107,12 +157,14 @@ pos_subida() {
   fi
   checar_http "http://127.0.0.1:8095/" "interface do A5"
   checar_http "http://127.0.0.1:8095/health" "API do A5 (pelo nginx)"
+  atualizar_permissoes_s3
   preparar_engine_i1
   ok "interface do A5: http://$JETSON_IP:8095  (usuário administrador; senha em a5.secrets.env)"
 }
 
 testar() {
   aceite_conferir a5-backend s3 s4
+  atualizar_permissoes_s3
   etapa "Cadeia de EPI (I9, I2, S1)"
   dc --profile cadeia up -d i9 i2 s1 >/dev/null
   aceite_iniciar

@@ -4,3 +4,4 @@ temp/
 __pycache__/
 builds/*/.estado-imagens
 validacao/*/resultados/
+builds/*/estado/

@@ -89,6 +89,14 @@ services:
       S3_PRODUTORES_COMANDOS: A5
     volumes:
       - s3-dados:/dados
+      # Permissões de ACKNOWLEDGE/MUTE/CLOSE: as do A5 (GET /integracoes/s3/permissoes), não o
+      # exemplo do contrato que vem na imagem (só user:maria e user:joao; o A5 age como
+      # user:administrador e recebia UNAUTHORIZED_ACTOR, Jetson 17/11/2026). O S3 lê o arquivo só
+      # na partida: o a5.sh o cria de config/permissoes-s3.exemplo.json, atualiza a partir do A5
+      # e reinicia o S3 quando muda.
+      # CONTORNO DO P3: o A5 só lista em "members" os papéis com usuários, e o S3 recusa ação com
+      # papel fora de "members"; o a5.sh acrescenta esses papéis com lista vazia (mesmo efeito).
+      - ./estado/permissoes-s3.json:/config/permissoes.json:ro
     depends_on:
       kafka-topicos: { condition: service_completed_successfully }
 

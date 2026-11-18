@@ -303,3 +303,17 @@
 - Causa no P3: a5.sh só fazia drop_caches antes do vídeo, não antes de compilar a engine (pos_subida/testar com a pilha toda de pé).
 - Feito: preparar_engine_i1 chama liberar_memoria quando a pasta da engine (I1_ENGINES_DIR/app-epi-1.0.0) não existe. bash -n ok. Sem commit.
 - Pedido ao usuário: deixar terminar; se falhar, drop_caches e ./a5.sh testar de novo; trazer o fim da saída.
+- Commit ecf8147: liberar_memoria antes de compilar a engine.
+
+### 2026-11-18 — 1º ./a5.sh testar completo na Jetson (aceite-a5-20261118-022008)
+- PASSOU 7, FALHOU 4 (C03, C06, C07, C11), BLOQUEADO 1 (C09), AVISO 1 (C04).
+- C10 PASSOU: 95 quadros do I1 na GPU, artifact_version app-epi-1.0.0-fp16, classes pessoa/capacete/colete. C12: 95 avaliações do I9. Cadeia real P4 -> I1 (GPU, EPI) -> I9 / I2 -> S1 funcionando.
+- A investigar: C03 (S4 sem clipe), C06/C07 (S3 recusa ACK: "UNAUTHORIZED_ACTOR user:administrador"), C08/C12 com estados {} (o I9 publica persons[].equipment[].state, o teste lia items[].compliance → defeito do TESTE), C13 transições 0 (I2 rastreia "pessoa"?), C11 (I9 fora do contrato 1.0: payload por quadro com persons[]; session.started do P4 com occurred_at, já conhecido).
+- Análise (18/11):
+  - C06/C07 = falha da COMPOSIÇÃO (P3): a imagem do S3 usa /config/permissoes.json de exemplo do contrato (só user:maria/user:joao); o A5 gera o arquivo certo em GET /integracoes/s3/permissoes, mas a build não ligava. E o arquivo do A5 cru é RECUSADO pelo validador do S3 ("role:operador não está em members": o A5 só põe em members papéis com usuários) — conferido com o código real do S3 (s3/permissoes.py). Recado VER-3.
+  - C08/C12 com {} = defeito do TESTE: o I9 publica payload.persons[].equipment[].{equipment_item,state}; o teste lia items[].compliance.
+  - C11: I9 fora do contrato 1.0 (6c: um evento por pessoa com detection_id/bbox/calibrated/items; o I9 publica por quadro com persons[]) → recado VER-3/I9; session.started do P4 com occurred_at (já conhecido, C18 do A8).
+  - C13: o teste só contava mensagens; transições 0 sugere trilhas vazias. I2 não filtra classes (pessoa usa o perfil padrão). Aguardando dados da placa.
+  - C03: S4 tem handler de ods.s2.event e loga o motivo quando não grava (sem buffer/relógio). Aguardando log do S4.
+- Feito: config/permissoes-s3.exemplo.json (validado com o código do S3: admin ACK/CLOSE ok); compose monta ./estado/permissoes-s3.json em /config/permissoes.json:ro; a5.sh garantir_permissoes_s3 (antes do up) e atualizar_permissoes_s3 (pos_subida e início do testar: baixa do A5, normaliza, regrava no mesmo inode, reinicia S3 se mudou); .gitignore builds/*/estado/; aceite: estados_epi (persons/equipment), C08 FALHOU se sem equipamento, C12 AVISO idem, C13 exige trilhas/posições com conteúdo, extras com resolução e amostras reais. py_compile/pyflakes/bash -n ok; simulador atualizado (formato real do I9): 6 cenários ok. Sem commit.
+- Na placa: precisa ./a5.sh subir (recria o S3 com o volume novo) antes do testar.

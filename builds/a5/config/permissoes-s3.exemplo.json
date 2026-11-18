@@ -1,0 +1,13 @@
+{
+  "members": {
+    "role:operador": [],
+    "role:supervisor": [],
+    "role:auditor": [],
+    "role:administrador": ["user:administrador"]
+  },
+  "actions": {
+    "ACKNOWLEDGE": ["role:operador", "role:supervisor", "role:administrador"],
+    "MUTE": ["role:operador", "role:supervisor", "role:administrador"],
+    "CLOSE": ["role:supervisor", "role:administrador"]
+  }
+}

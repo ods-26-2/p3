@@ -29,6 +29,13 @@ FONTE = os.environ.get("VIDEO_SOURCE_ID", "file_epi")
 PACOTE = os.environ.get("I1_PACOTE", "app-epi/1.0.0").replace("/", "-")
 ZONA, EPI = "galpao-solda", "luva"
 CLASSES_EPI = {"pessoa", "capacete", "colete"}
+
+
+def estados_epi(msgs: list) -> Counter:
+    """Conta "<equipamento>:<estado>" nas avaliações do I9 (payload.persons[].equipment[]),
+    o formato que o I9 publica hoje (8ae3933)."""
+    return Counter(f"{e.get('equipment_item')}:{e.get('state')}"
+                   for m in msgs for p in payload(m).get("persons", []) for e in p.get("equipment", []))
 # Quantas mensagens reais por tópico entram na validação de contrato (o vídeo gera milhares).
 AMOSTRA_CONTRATO = 50
 
@@ -99,8 +106,10 @@ def main() -> int:
     bus.publicar(det)
     epi = bus.esperar(lambda: [m for m in bus.mensagens("ods.i9.ppe_compliance") if m.get("session_id") == sessao_i1], 30) or []
     if epi:
-        itens = {i.get("equipment_item"): i.get("compliance") for i in payload(epi[0]).get("items", [])}
-        t.registrar("C08", "I9 avalia o EPI da pessoa (entrada simulada: I1)", PASSOU, str(itens))
+        itens = dict(estados_epi(epi[:1]))
+        t.registrar("C08", "I9 avalia o EPI da pessoa (entrada simulada: I1)",
+                    PASSOU if itens else FALHOU,
+                    str(itens) if itens else "avaliação sem equipamentos associados à pessoa")
     else:
         t.registrar("C08", "I9 avalia o EPI da pessoa (entrada simulada: I1)", AVISO,
                     "sem ods.i9.ppe_compliance: a cadeia está de pé (./a5.sh cadeia)? O I9 pode esperar o "
@@ -147,9 +156,11 @@ def main() -> int:
                              "classes_fora_do_modelo": sorted(set(classes) - CLASSES_EPI)}
 
         avals = bus.mensagens("ods.i9.ppe_compliance", do_video)
-        estados = Counter(f"{i.get('equipment_item')}:{i.get('compliance')}"
-                          for m in avals for i in payload(m).get("items", []))
-        if avals:
+        estados = estados_epi(avals)
+        if avals and not estados and classes.get("pessoa"):
+            t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", AVISO,
+                        f"{len(avals)} avaliação(ões), nenhuma com equipamento associado a uma pessoa")
+        elif avals:
             t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", PASSOU,
                         f"{len(avals)} avaliação(ões): {dict(estados)}")
         elif classes.get("pessoa"):
@@ -163,10 +174,30 @@ def main() -> int:
         posicoes = bus.mensagens("ods.s1.position", do_video)
         transicoes = bus.mensagens("ods.s1.zone_transition", do_video)
         no_galpao = [m for m in transicoes if payload(m).get("zone_id") == ZONA]
-        t.registrar("C13", "Rastreio e zonas do vídeo (I2 -> S1)",
-                    PASSOU if trilhas and posicoes else (AVISO if dets else FALHOU),
-                    f"I2 {len(trilhas)}, S1 posições {len(posicoes)}, transições {len(transicoes)} "
-                    f"({len(no_galpao)} em {ZONA}); zonas de exemplo do P3, em pixels")
+        # Mensagem vazia (tracks/positions = []) não prova rastreio: conta só as com conteúdo.
+        com_trilha = [m for m in trilhas if payload(m).get("tracks")]
+        com_posicao = [m for m in posicoes if payload(m).get("positions")]
+        detalhe = (f"I2 {len(trilhas)} ({len(com_trilha)} com trilhas), S1 posições {len(posicoes)} "
+                   f"({len(com_posicao)} com posições), transições {len(transicoes)} ({len(no_galpao)} em "
+                   f"{ZONA}); zonas de exemplo do P3, em pixels")
+        if com_trilha and com_posicao:
+            estado = PASSOU
+        elif trilhas or posicoes:
+            estado = AVISO
+            detalhe += ("; I2/S1 publicam, mas sem trilhas" if not com_trilha else "; trilhas sem posição no S1")
+        else:
+            estado = AVISO if dets else FALHOU
+        t.registrar("C13", "Rastreio e zonas do vídeo (I2 -> S1)", estado, detalhe)
+
+        # Resolução do vídeo e uma mensagem real de cada elo (para diagnóstico no .json).
+        tamanhos = Counter(f"{payload(m).get('image_width')}x{payload(m).get('image_height')}" for m in dets)
+        t.extras["video"]["resolucao"] = dict(tamanhos)
+        t.extras["video"]["amostras_reais"] = {
+            "ods.i1.detections": next((m for m in dets if payload(m).get("detections")), dets[0] if dets else None),
+            "ods.i9.ppe_compliance": next((m for m in avals if payload(m).get("persons")), avals[0] if avals else None),
+            "ods.i2.tracks": next((m for m in com_trilha), trilhas[0] if trilhas else None),
+            "ods.s1.position": next((m for m in com_posicao), posicoes[0] if posicoes else None),
+        }
 
     contagem_real: Counter = Counter()
 
