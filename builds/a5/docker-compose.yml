@@ -53,6 +53,16 @@ services:
       - a5-dados:/data
     ports:
       - "127.0.0.1:8000:8000"
+    # Healthcheck de porta, o mesmo do compose do VER-3. O backend só abre a 8000 depois do
+    # lifespan, que publica os artefatos e espera o reply do S2 às regras (2 × 10 s). Sem o S2 no
+    # Kafka, toda partida fica ~20 s fechada; sem este healthcheck o a5.sh seguia com o container
+    # só "running" e o nginx respondia 502 (Jetson, 17/11/2026).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 5).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     depends_on:
       kafka-topicos: { condition: service_completed_successfully }
 
@@ -63,7 +73,9 @@ services:
     ports:
       # 8095 em vez de 8080, como o VER-3 definiu (a Jetson já usa 8080)
       - "8095:80"
-    depends_on: [a5-backend]
+    # O nginx só sobe com o backend aceitando conexões (senão as primeiras chamadas dão 502).
+    depends_on:
+      a5-backend: { condition: service_healthy }
 
   s3:
     # Alertas e notificações · VER-3. Comando padrão da imagem: ROUTING e permissões de

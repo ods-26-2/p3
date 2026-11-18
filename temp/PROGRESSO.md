@@ -3,8 +3,8 @@
 ## Estado atual
 - Aplicação em foco: A5 (decisão do usuário em 17/11; A2 preparado sem commit, fora de foco)
 - Fase: A5 compose/script/aceite prontos (I1 GPU + modelo app-epi), validados só fora da placa
-- Último resultado: (17/11) aceite do A5 contra Kafka falso: 5 cenários com o resultado esperado
-- Próximo passo: usuário: vídeo epi.mp4 em /var/lib/ods/videos + commit; na Jetson: cd builds/a5 && cp a5.secrets.env.exemplo a5.secrets.env (A5_ADMIN_SENHA) → ../ods.sh trocar a5 → ./a5.sh testar → validar-sistema.sh a5 → validar-a5-fluxo.sh
+- Último resultado: (17/11) Jetson: 502 no /health do A5 → healthcheck no a5-backend + front espera service_healthy (commit desta correção)
+- Próximo passo: push de c8d41dc (pedir ao usuário); vídeo epi.mp4 em /var/lib/ods/videos; na Jetson: cd builds/a5 && cp a5.secrets.env.exemplo a5.secrets.env (A5_ADMIN_SENHA) → ../ods.sh trocar a5 → ./a5.sh testar → validar-sistema.sh a5 → validar-a5-fluxo.sh
 - Bloqueios / perguntas abertas ao usuário: vídeo de EPI (não há no repo); docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; A2 preparado sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -272,3 +272,15 @@
 - Feito (A5, 17/11): a5.env (S3 1a322c4, I1 develop cb5c381 em GPU, I1_PACOTE=app-epi/1.0.0, I1_ENGINES_DIR, I1_BASE_IMAGE, VIDEO_ARQUIVO=epi.mp4, VIDEO_SOURCE_ID=file_epi; sem MODELOS_DIR/I1_ONNX); compose: i1 = I1 GPU do A8 + i1-engine, p4/s4 com VIDEO_ARQUIVO, p4 espera i1-engine, aceite com VIDEO_SOURCE_ID/I1_PACOTE; zonas com file_epi; a5.sh com checar_gpu, pasta de engines, preparar_engine_i1 (no pos_subida), liberar_memoria, tocar_video, coerência VIDEO_ARQUIVO↔VIDEO_SOURCE_ID↔zonas; testar = itens simulados → espera "passo externo 'video'" → vídeo → passo → restart s4; aceite_a5.py: C10 detecção real (exige app-epi-1.0.0-fp16 + pessoa), C12 I9 no vídeo, C13 I2→S1, amostra de 50 msgs reais por tópico no contrato; docs (README builds/validacao, relatório, CLAUDE.md MOD-1/B5 e nota A3/A4/A5).
 - Validado (fora da Jetson): bash -n; py_compile + pyflakes (limpo); YAML/variáveis do compose; commits fixados existem; Dockerfile.jetson copia I1/ (app-epi entra na imagem); aceite contra Kafka/API falsos (scratchpad/sim-a5): ok → 11 PASSOU; cpu → C10 FALHOU; sem_pessoa → C10/C12 AVISO; sem_i9 → C12 FALHOU; sem_video → C10/C12/C13 BLOQUEADO. NÃO validado: docker compose config, shellcheck, execução na placa.
 - Pendente com o usuário: vídeo de EPI (/var/lib/ods/videos/epi.mp4, pessoas com/sem capacete e colete, H.264, ~1280x720); commit.
+
+### 2026-11-17 — commit do A5
+- Commit c8d41dc (local, sem push): builds/a5, validacao/a5, linhas do A5 no CLAUDE.md e builds/README.md, este arquivo. Alterações do A2 seguem só no disco.
+- Limpeza: na 1ª tentativa de clonar (scratchpad inexistente) 6 clones --bare (a5 b5 i2 i9 p4 s1, ~320 MB) caíram em builds/a5/; removidos antes do commit.
+- Próximo: git push (se o usuário pedir); na Jetson, git pull e o roteiro do Estado atual.
+
+### 2026-11-17 — A5 na Jetson: "/health" pelo nginx com HTTP 502 no pos_subida
+- Usuário trouxe: "! API do A5 (pelo nginx) ainda não respondeu em http://127.0.0.1:8095/health (HTTP 502)".
+- Causa provável (código a5 c634433): lifespan roda PublicacaoService().sincronizar() antes do yield; RULES -> S2 espera reply 2 × 10 s (S2 sem Kafka) → backend fica ~20 s sem abrir a 8000 a cada partida (rules-a5 nunca é registrado). Nosso compose não tinha healthcheck → esperar_servicos aceitou "running" → nginx 502.
+- Feito: healthcheck de porta no a5-backend (igual ao do VER-3; interval 5s, start_period 90s) e a5-frontend depends_on service_healthy. YAML conferido localmente. Sem commit ainda.
+- Recado VER-3: não bloquear a partida esperando reply do S2 (mover o sincronizar para depois do yield/thread).
+- Próximo: usuário confirmar na placa (logs do a5-backend, curl /health) e repetir ./a5.sh subir.
