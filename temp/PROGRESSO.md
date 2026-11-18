@@ -2,10 +2,10 @@
 
 ## Estado atual
 - Aplicação em foco: A5 (decisão do usuário em 17/11; A2 preparado sem commit, fora de foco)
-- Fase: A5 subido na Jetson (backend, front, S3, S4; /health 200 pelo nginx em 17/11); falta o teste de aceitação com vídeo
-- Último resultado: (17/11) Jetson: senha < 4 derrubava o backend; nginx com IP velho do backend (502) → restart do front → 200
-- Próximo passo: push; vídeo epi.mp4 em /var/lib/ods/videos; ./a5.sh testar; validar-sistema.sh a5; validar-a5-fluxo.sh
-- Bloqueios / perguntas abertas ao usuário: vídeo de EPI (não há no repo); docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; A2 preparado sem commit
+- Fase: A5 testado na Jetson com vídeo real (18/11 13:12): PASSOU 9, FALHOU 2 (C03, C11), BLOQUEADO 1 (C09), AVISO 1 (C04)
+- Último resultado: permissões do S3 (5a17aeb) validadas na placa (C06/C07 PASSOU); epi.mp4 é 1920x1080 e a zona cobria 1280x720 (0 transições) → zones-a5-p3-2 em 1920x1080, C13 exige ponto na zona e transição (sem commit)
+- Próximo passo: commit + push; ./a5.sh subir (recria o S1 com a zona nova) e ./a5.sh testar; log do S4 (grep "S2 event") para o C03
+- Bloqueios / perguntas abertas ao usuário: C03 (S4 sem clipe, falta o log); capacete INCORRETO em 102/102 quadros (vídeo ou geometria do I9? olhar um quadro); S2 fora do Kafka impede o tempo real; A2 preparado sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -317,3 +317,11 @@
   - C03: S4 tem handler de ods.s2.event e loga o motivo quando não grava (sem buffer/relógio). Aguardando log do S4.
 - Feito: config/permissoes-s3.exemplo.json (validado com o código do S3: admin ACK/CLOSE ok); compose monta ./estado/permissoes-s3.json em /config/permissoes.json:ro; a5.sh garantir_permissoes_s3 (antes do up) e atualizar_permissoes_s3 (pos_subida e início do testar: baixa do A5, normaliza, regrava no mesmo inode, reinicia S3 se mudou); .gitignore builds/*/estado/; aceite: estados_epi (persons/equipment), C08 FALHOU se sem equipamento, C12 AVISO idem, C13 exige trilhas/posições com conteúdo, extras com resolução e amostras reais. py_compile/pyflakes/bash -n ok; simulador atualizado (formato real do I9): 6 cenários ok. Sem commit.
 - Na placa: precisa ./a5.sh subir (recria o S3 com o volume novo) antes do testar.
+
+### 2026-11-18 13:30 — aceite-a5-20261118-131217 (Jetson)
+- Resultado: PASSOU 9, FALHOU 2, BLOQUEADO 1, AVISO 1. C06/C07 passaram (permissões do S3 vindas do A5, commit 5a17aeb). C08/C12 com o parser novo: I9 real avaliou 102 quadros, capacete INCORRETO 102, colete INCORRETO 101 (no quadro 83 o capacete está na parte de baixo da caixa da pessoa: placement_score 0,12, v 0,22).
+- C13: 100 posições, todas com zone_ids vazio. Vídeo 1920x1080, zona 0..1280x0..720 (ex.: ponto 848,1075 fora).
+- Feito: zona renomeada para artefatos/zones-a5-p3-2.json em 1920x1080 (compose, a5.sh, a5.env); C13 agora só PASSOU com ponto na zona e transição, AVISO cita a resolução; resolução calculada antes do C13. py_compile, pyflakes, bash -n ok; regra testada com as posições reais do relatório.
+- Tempo real (pergunta do usuário): P4 tem modo câmera (IMX519/477 1080p RG10) e o I1 lê /tmp/p4_imx519_shm; o que impede alertas reais é o S2 fora do Kafka (A5 ← ods.s3.alert ← ods.s2.event); S4 com câmera esbarra no P4R1 × NV12.
+- C03: S4 registra o motivo (S2 event ignored / no capture buffer / buffer clock not started / clip failed) — falta o log.
+- Próximo: commit quando o usuário pedir; rodar de novo na placa.

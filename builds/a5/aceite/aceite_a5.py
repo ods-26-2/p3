@@ -170,6 +170,8 @@ def main() -> int:
             t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", AVISO, "sem pessoas detectadas no vídeo")
         t.extras["video"]["i9"] = {"avaliacoes": len(avals), "estados": dict(estados)}
 
+        tamanhos = Counter(f"{payload(m).get('image_width')}x{payload(m).get('image_height')}" for m in dets)
+        t.extras["video"]["resolucao"] = dict(tamanhos)
         trilhas = bus.mensagens("ods.i2.tracks", do_video)
         posicoes = bus.mensagens("ods.s1.position", do_video)
         transicoes = bus.mensagens("ods.s1.zone_transition", do_video)
@@ -177,11 +179,20 @@ def main() -> int:
         # Mensagem vazia (tracks/positions = []) não prova rastreio: conta só as com conteúdo.
         com_trilha = [m for m in trilhas if payload(m).get("tracks")]
         com_posicao = [m for m in posicoes if payload(m).get("positions")]
+        # Posição com zone_ids vazio = ponto fora de toda zona (ex.: zona 1280x720 e vídeo 1920x1080,
+        # Jetson 18/11/2026: 100 posições, 0 transições).
+        na_zona = [m for m in com_posicao
+                   if any(ZONA in (p.get("zone_ids") or []) for p in payload(m).get("positions", []))]
         detalhe = (f"I2 {len(trilhas)} ({len(com_trilha)} com trilhas), S1 posições {len(posicoes)} "
-                   f"({len(com_posicao)} com posições), transições {len(transicoes)} ({len(no_galpao)} em "
-                   f"{ZONA}); zonas de exemplo do P3, em pixels")
-        if com_trilha and com_posicao:
+                   f"({len(com_posicao)} com posições, {len(na_zona)} em {ZONA}), transições "
+                   f"{len(transicoes)} ({len(no_galpao)} em {ZONA}); zonas de exemplo do P3, em pixels")
+        if com_trilha and com_posicao and na_zona and no_galpao:
             estado = PASSOU
+        elif com_trilha and com_posicao:
+            estado = AVISO
+            resol = ", ".join(t.extras["video"].get("resolucao", {})) or "?"
+            detalhe += (f"; pontos fora da zona {ZONA}: confira se a zona cobre o vídeo ({resol})"
+                        if not na_zona else "; posições na zona, mas o S1 não publicou a transição")
         elif trilhas or posicoes:
             estado = AVISO
             detalhe += ("; I2/S1 publicam, mas sem trilhas" if not com_trilha else "; trilhas sem posição no S1")
@@ -189,9 +200,7 @@ def main() -> int:
             estado = AVISO if dets else FALHOU
         t.registrar("C13", "Rastreio e zonas do vídeo (I2 -> S1)", estado, detalhe)
 
-        # Resolução do vídeo e uma mensagem real de cada elo (para diagnóstico no .json).
-        tamanhos = Counter(f"{payload(m).get('image_width')}x{payload(m).get('image_height')}" for m in dets)
-        t.extras["video"]["resolucao"] = dict(tamanhos)
+        # Uma mensagem real de cada elo (para diagnóstico no .json).
         t.extras["video"]["amostras_reais"] = {
             "ods.i1.detections": next((m for m in dets if payload(m).get("detections")), dets[0] if dets else None),
             "ods.i9.ppe_compliance": next((m for m in avals if payload(m).get("persons")), avals[0] if avals else None),

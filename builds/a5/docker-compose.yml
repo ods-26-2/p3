@@ -188,8 +188,8 @@ services:
     restart: unless-stopped
     environment:
       S1_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
-      S1_ZONES_FILE: /artefatos/zones-a5-p3-1.json
-      S1_ZONES_VERSION: zones-a5-p3-1
+      S1_ZONES_FILE: /artefatos/zones-a5-p3-2.json
+      S1_ZONES_VERSION: zones-a5-p3-2
     volumes:
       - ./artefatos:/artefatos:ro
     depends_on:

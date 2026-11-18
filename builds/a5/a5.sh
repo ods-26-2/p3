@@ -137,8 +137,8 @@ checar_entradas() {
   local esperado="file_${VIDEO_ARQUIVO%.*}"
   [[ "$VIDEO_SOURCE_ID" == "$esperado" ]] \
     || erro "VIDEO_SOURCE_ID=$VIDEO_SOURCE_ID, mas o P4 vai publicar $esperado (de $VIDEO_ARQUIVO). Acerte o a5.env."
-  grep -q "\"$VIDEO_SOURCE_ID\"" artefatos/zones-a5-p3-1.json \
-    || aviso "as zonas (artefatos/zones-a5-p3-1.json) não citam $VIDEO_SOURCE_ID: o S1 não vai ligar as posições à zona"
+  grep -q "\"$VIDEO_SOURCE_ID\"" artefatos/zones-a5-p3-2.json \
+    || aviso "as zonas (artefatos/zones-a5-p3-2.json) não citam $VIDEO_SOURCE_ID: o S1 não vai ligar as posições à zona"
   return 0
 }
 

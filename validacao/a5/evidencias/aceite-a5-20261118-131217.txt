@@ -1,0 +1,30 @@
+Teste de aceitação do A5 — 2026-11-18T13:08:41.114Z
+S2 simulado -> S3 -> A5 (+ S4 automático e reconhecimento), I1 simulado -> I9, vídeo real: P4 -> I1 (GPU, EPI) -> I9 e I2 -> S1
+
+C01   PASSOU     Login do administrador na API do A5
+                  HTTP 200
+C02   PASSOU     S3 cria o alerta pelo ROUTING do A5 (entrada simulada: S2)
+                  d5f34c9b-5632-400d-ac25-fe1ae41cc4b3, severidade HIGH
+C03   FALHOU     S4 grava a evidência do evento automaticamente (ods.s4.clip)
+                  sem clipe do evento (o S4 tem o vídeo VIDEO_ARQUIVO no buffer?)
+C04   AVISO      Alerta com a evidência vinculada (clip_id)
+                  o S3 não vinculou o clipe ao alerta
+C05   PASSOU     Alerta aparece no A5 (/alertas)
+                  EPI ausente: luva — estado CREATED
+C06   PASSOU     Reconhecimento pela API do A5 vira comando ao S3
+                  HTTP 200, 1 comando(s)
+C07   PASSOU     S3 republica o alerta como ACKNOWLEDGED
+C08   PASSOU     I9 avalia o EPI da pessoa (entrada simulada: I1)
+                  {'capacete:CORRETO': 1, 'colete:CORRETO': 1}
+C09   BLOQUEADO  Eventos de EPI do S2 a partir do I9
+                  o S2 ainda não publica no Kafka
+C10   PASSOU     Detecção real de EPI no vídeo (I1 na GPU)
+                  102 quadro(s), sessão fffaee18-6f37-4d2d-ae00-d5634527f3ce, classes {'capacete': 102, 'colete': 102, 'pessoa': 102}, artifact_version ['app-epi-1.0.0-fp16']
+C12   PASSOU     I9 avalia o EPI das pessoas do vídeo
+                  102 avaliação(ões): {'capacete:INCORRETO': 102, 'colete:CORRETO': 1, 'colete:INCORRETO': 101}
+C13   PASSOU     Rastreio e zonas do vídeo (I2 -> S1)
+                  I2 102 (100 com trilhas), S1 posições 102 (100 com posições), transições 0 (0 em galpao-solda); zonas de exemplo do P3, em pixels
+C11   FALHOU     Envelope 1.0 das mensagens recebidas (validador do B4)
+                  ods.i9.ppe_compliance: 51/51 (missing payload field: detection_id); ods.session.started: 1/1 (missing envelope field: published_at)
+
+Resumo: PASSOU 9  FALHOU 2  BLOQUEADO 1  AVISO 1
