@@ -39,6 +39,10 @@ checar_pasta_engines() {
 # Engine TensorRT do I1: compila na primeira vez (~7 min); depois só confere (segundos).
 preparar_engine_i1() {
   etapa "Engine TensorRT do I1 ($I1_PACOTE em $I1_ENGINES_DIR)"
+  # Compilar a engine também precisa de memória da GPU: com a pilha do A5 de pé, o p2-build
+  # imprimiu dezenas de "NvMapMemAllocInternalTagged ... error 12" (Jetson, 17/11/2026).
+  # Só esvazia o cache se a engine ainda não existe (senão a conferência leva segundos).
+  [[ -d "$I1_ENGINES_DIR/${I1_PACOTE/\//-}" ]] || liberar_memoria
   dc --profile video run --rm i1-engine || erro "a engine do I1 não ficou pronta; veja a saída acima"
   checar_disco
 }

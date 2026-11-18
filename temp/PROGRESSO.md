@@ -297,3 +297,9 @@
 - Obs.: o usuário usou o alias "dc" do ~/.bashrc (aponta para a8.env) → "couldn't find env file a8.env"; redefinir o alias na pasta do A5 ou usar ./a5.sh.
 - Jetson: após dc restart a5-frontend o curl imediato deu 000 (nginx ainda reiniciando, 1,1 s). a5.sh agora espera o front responder (até 15 s) depois do restart. Pedido: repetir o curl com sleep 3.
 - Jetson (17/11): após o restart do front, curl http://127.0.0.1:8095/health → 200. A5 DE PÉ na placa (a5-backend healthy, a5-frontend, s3, s4). Falta: vídeo epi.mp4 e ./a5.sh testar.
+
+### 2026-11-17 — A5 testar: compilação da engine app-epi com "NvMap ... error 12"
+- Saída do usuário: i1-engine compilando app-epi-1.0.0 (FP16; ENGINE_NOT_FOUND na 1ª vez) e dezenas de "NvMapMemAllocInternalTagged: 1075072515 error 12" (ENOMEM da GPU; mesma família do OUT_OF_MEMORY do A8 em 14/11). Resultado final ainda não visto (pode terminar: o TensorRT pula táticas sem memória).
+- Causa no P3: a5.sh só fazia drop_caches antes do vídeo, não antes de compilar a engine (pos_subida/testar com a pilha toda de pé).
+- Feito: preparar_engine_i1 chama liberar_memoria quando a pasta da engine (I1_ENGINES_DIR/app-epi-1.0.0) não existe. bash -n ok. Sem commit.
+- Pedido ao usuário: deixar terminar; se falhar, drop_caches e ./a5.sh testar de novo; trazer o fim da saída.
