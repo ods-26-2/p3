@@ -2,9 +2,9 @@
 
 ## Estado atual
 - Aplicação em foco: A5 (decisão do usuário em 17/11; A2 preparado sem commit, fora de foco)
-- Fase: A5 compose/script/aceite prontos (I1 GPU + modelo app-epi), validados só fora da placa
-- Último resultado: (17/11) Jetson: 502 no /health do A5 → healthcheck no a5-backend + front espera service_healthy (commit desta correção)
-- Próximo passo: push de c8d41dc (pedir ao usuário); vídeo epi.mp4 em /var/lib/ods/videos; na Jetson: cd builds/a5 && cp a5.secrets.env.exemplo a5.secrets.env (A5_ADMIN_SENHA) → ../ods.sh trocar a5 → ./a5.sh testar → validar-sistema.sh a5 → validar-a5-fluxo.sh
+- Fase: A5 subido na Jetson (backend, front, S3, S4; /health 200 pelo nginx em 17/11); falta o teste de aceitação com vídeo
+- Último resultado: (17/11) Jetson: senha < 4 derrubava o backend; nginx com IP velho do backend (502) → restart do front → 200
+- Próximo passo: push; vídeo epi.mp4 em /var/lib/ods/videos; ./a5.sh testar; validar-sistema.sh a5; validar-a5-fluxo.sh
 - Bloqueios / perguntas abertas ao usuário: vídeo de EPI (não há no repo); docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; A2 preparado sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -284,3 +284,16 @@
 - Feito: healthcheck de porta no a5-backend (igual ao do VER-3; interval 5s, start_period 90s) e a5-frontend depends_on service_healthy. YAML conferido localmente. Sem commit ainda.
 - Recado VER-3: não bloquear a partida esperando reply do S2 (mover o sincronizar para depois do yield/thread).
 - Próximo: usuário confirmar na placa (logs do a5-backend, curl /health) e repetir ./a5.sh subir.
+
+### 2026-11-17 — A5 na Jetson: a5-backend "unhealthy" (com o healthcheck novo)
+- Saída do usuário: I1 GPU construído (ods-i1-gpu:cb5c381), disco 10 GB livres; up: kafka-topicos Exited em 72,1 s (lento!), s3/s4 Started ~93 s, a5-backend "dependency failed to start: unhealthy" em 95,9 s, frontend Running.
+- Hipótese: partida do backend > 90 s com o Kafka da turma lento: _garantir_escuta até 15 s, flush(10) por artefato publicado (ZONES por câmera, PPE_CATALOG, ROUTING), RULES -> S2 2 × 10 s. Outra possibilidade: erro na partida (crash/loop).
+- Pedido ao usuário: estado + Health do container, logs do backend, tempo de resposta do broker. NÃO mexer no compose antes de ver os logs.
+- RESULTADO (logs do usuário): NÃO era Kafka (broker respondeu em 3,9 s). a5-backend em laço (11 reinícios): "ValueError: A senha precisa de pelo menos 4 caracteres." (auth/service.py:_definir_senha; única regra). A5_ADMIN_SENHA da placa tem < 4 caracteres. O 502 anterior provavelmente era o mesmo erro (a hipótese do S2 explica só ~20 s de partida; healthcheck mantido).
+- Feito: a5.sh checar_entradas para com erro claro se A5_ADMIN_SENHA < 4; a5.secrets.env.exemplo documenta a regra. bash -n ok; checagem simulada (3 → erro, 4 → ok).
+- Próximo: usuário corrigir a senha na placa e "dc up -d" (ou ./a5.sh subir); commit desta checagem.
+- Jetson (17/11): com senha de 4+ caracteres o a5-backend ficou "healthy" (partida ~70 s junto com kafka-topicos). Restou 502 no :8095/health: o frontend (Up 40 min) não foi recriado; o nginx do VER-3 resolve "backend" só ao subir e guardou o IP do container velho. Solução imediata: dc restart a5-frontend.
+- Feito: a5.sh pos_subida reinicia o a5-frontend se ele começou antes do backend atual (StartedAt). bash -n ok. Sem commit (junto com a checagem da senha).
+- Obs.: o usuário usou o alias "dc" do ~/.bashrc (aponta para a8.env) → "couldn't find env file a8.env"; redefinir o alias na pasta do A5 ou usar ./a5.sh.
+- Jetson: após dc restart a5-frontend o curl imediato deu 000 (nginx ainda reiniciando, 1,1 s). a5.sh agora espera o front responder (até 15 s) depois do restart. Pedido: repetir o curl com sleep 3.
+- Jetson (17/11): após o restart do front, curl http://127.0.0.1:8095/health → 200. A5 DE PÉ na placa (a5-backend healthy, a5-frontend, s3, s4). Falta: vídeo epi.mp4 e ./a5.sh testar.

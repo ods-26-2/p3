@@ -70,6 +70,11 @@ tocar_video() {
 # ---------------------------------------------------------------- ganchos da lib
 
 checar_entradas() {
+  # O backend recusa senha com menos de 4 caracteres e cai na partida, em laço de reinícios
+  # ("ValueError: A senha precisa de pelo menos 4 caracteres", Jetson, 17/11/2026).
+  local senha
+  senha=$(grep -E '^A5_ADMIN_SENHA=' a5.secrets.env | cut -d= -f2-)
+  (( ${#senha} >= 4 )) || erro "A5_ADMIN_SENHA em a5.secrets.env precisa de pelo menos 4 caracteres (tem ${#senha})"
   checar_gpu
   checar_pasta_engines
   entrada_arquivo "$VIDEO_DIR/$VIDEO_ARQUIVO" "vídeo de EPI (pessoas com/sem capacete e colete)" \
@@ -84,6 +89,18 @@ checar_entradas() {
 }
 
 pos_subida() {
+  # O nginx do front (nginx.conf do VER-3) resolve "backend" uma vez, ao subir, e guarda o IP.
+  # Se o backend foi recriado depois (senha nova, imagem nova), o IP muda e o nginx responde 502
+  # (Jetson, 17/11/2026). Reiniciar o front faz ele resolver de novo; leva ~1 s.
+  local ini_back ini_front
+  ini_back=$(docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q a5-backend)")
+  ini_front=$(docker inspect -f '{{.State.StartedAt}}' "$(dc ps -q a5-frontend)")
+  if [[ "$ini_front" < "$ini_back" ]]; then
+    dc restart a5-frontend >/dev/null
+    local i=0
+    until curl -s -o /dev/null -m 2 http://127.0.0.1:8095/ || (( ++i >= 15 )); do sleep 1; done
+    ok "frontend reiniciado (o backend foi recriado depois dele)"
+  fi
   checar_http "http://127.0.0.1:8095/" "interface do A5"
   checar_http "http://127.0.0.1:8095/health" "API do A5 (pelo nginx)"
   preparar_engine_i1
