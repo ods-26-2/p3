@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: A8 com I1 na GPU (TensorRT via P2), depois A1–A7
-- Fase: I1 em GPU VALIDADO na Jetson (14/11: G01–G05 passaram, 8,1 ms GPU × 261 ms CPU); G06–G08 não rodaram por defeito do teste (aviso da NVIDIA no stdout), corrigido; falta rodar o teste de novo e subir o A8
-- Último resultado: testar-i1-gpu.sh ok contra docker/tegrastats simulados (sucesso, queda p/ CPU, sem runtime nvidia); compose do A8 checado só por YAML/variáveis
-- Próximo passo: na Jetson: git pull; cd validacao/i1 && ./testar-i1-gpu.sh (rápido: imagem e engine já existem); copiar o relatório para validacao/i1/evidencias/; depois cd builds/a8 && ./a8.sh subir && ./a8.sh testar. Se passar: levar o I1 em GPU para A3/A4/A5. Depois: A1–A7 por app (./ods.sh trocar <app> -> validar-sistema.sh -> validar-<app>-fluxo.sh -> ./<app>.sh testar), começando pelo A2.
-- Bloqueios / perguntas abertas ao usuário: docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; espaço em disco para a base l4t-jetpack r36.4.0 (vários GB)
+- Aplicação em foco: A5 (decisão do usuário em 17/11; A2 preparado sem commit, fora de foco)
+- Fase: A5 compose/script/aceite prontos (I1 GPU + modelo app-epi), validados só fora da placa
+- Último resultado: (17/11) aceite do A5 contra Kafka falso: 5 cenários com o resultado esperado
+- Próximo passo: usuário: vídeo epi.mp4 em /var/lib/ods/videos + commit; na Jetson: cd builds/a5 && cp a5.secrets.env.exemplo a5.secrets.env (A5_ADMIN_SENHA) → ../ods.sh trocar a5 → ./a5.sh testar → validar-sistema.sh a5 → validar-a5-fluxo.sh
+- Bloqueios / perguntas abertas ao usuário: vídeo de EPI (não há no repo); docker compose config e shellcheck não rodados localmente; tag a8-cadeia-v1 a confirmar; A2 preparado sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -245,3 +245,30 @@
 - S01 imagem cb5c381 (2,1 GB); S02 39/40 (só test_05, ultralytics); S03 CMD padrão: código 0, 9 mensagens, 9 detecções, -fp16.
 - Arquivos: validacao/i1/evidencias/i1-servico-2026-11-14.txt; README; CLAUDE.md seção 6.
 - Próximo: decisão do usuário sobre o sinal verde ao MOD-1 (texto revisto: sem merge na main, + test_05 pular sem ultralytics); teste de resistência do jetson_clocks; tags.
+
+### 2026-11-17 — análise: qual aplicação está mais completa para subir
+- Pedido do usuário: com base no feito e nas atualizações recentes dos repos da turma, qual app subir agora.
+- Feito: pushed_at da org (atividade desde 13/11: i6, a2 [17/11], b1, i4, i7, s2, a7, i5, s3, i1, a6, s4); clones bare em scratchpad/repos para comparar com os commits fixados.
+- Resultado (17/11): commits novos desde os fixados: A2 main 19ead4e (develop fundida hoje; web-app com Dockerfile próprio, porta 8080, painel de telemetria; núcleo A2Local quase igual; web-app ainda com AES b"a"*32 e SQLite dentro da imagem); I6 main 86ae5d7 = develop ff1bf44 (sem mudança de código); I7 main ff9d759 (detector_p2.py, modelo app-plates no repo, broker da Jetson); I1 develop cb5c381 já fixado; S4 2324858/298e3de (registry e broker revertido p/ 34.66.235.91 — conferir se é só padrão); I5 ganhou Dockerfile/Dockerfile.jetson (A7 ainda sem); A6 5ad584c (qwen3-frases-deploy); I4 503f64b (docker); S3 1a322c4 "S3 na nuvem"; S2 develop 7c0e841 (testes, segue sem Kafka); B1 só dependabot.
+- Conclusão: mais completa = A8 (única validada na placa, cadeia inteira). Próxima nova = A2 (main fundida hoje, Dockerfiles do time, 3 componentes, sem GPU). A3/A4/A5/A1/A6/A7 seguem bloqueadas por S2, falta de Dockerfile, modelos ou P5/P7.
+- Próximo: aguardar o usuário — sugerido refixar A2 na main 19ead4e (e usar o Dockerfile do web-app) e conferir I7 ff9d759 / S4 298e3de no A8.
+
+### 2026-11-17 — preparar A2 (pedido do usuário: "vamos preparar as coisas para a2")
+- Levantamento a2 main 19ead4e: A2Local só ganhou utils/payload.py (chave fixa, não usado pelo liberar.py); web-app com Dockerfile multiestágio (node:20-alpine → python:3.12-slim, PORT 8080, HEALTHCHECK /admin); .dockerignore tira o db.db da imagem; DB_PATH fixo em backend/db/db.db (mesma pasta de connection.py → volume ali congelaria o código); ACCESS_EVENT_KEY gerada e gravada em /app/.env se não vier do ambiente; admin padrão admin/admin123; rota /access-event existe mas nada no A2 a chama (painel sem dados); AES do web-app segue b"a"*32.
+- I6 main 86ae5d7: mesma árvore de ff1bf44 → fixar na main (sem custo, A2 nunca foi construído na placa).
+- S4: novos commits só mudam o broker padrão e build/registry → manter be0cad9 (validado no A8, imagem já na placa).
+- Plano: a2.env (A2 19ead4e, I6 86ae5d7); compose a2-cracha com o Dockerfile do VER-2 + volume a2-cracha-dados em /dados e symlink do db.db; ACCESS_EVENT_KEY opcional nos segredos; validar-a2-fluxo.sh com rotas novas; README/LEIA-ME/CLAUDE.md.
+- Feito: a2.env (A2 19ead4e main, I6 86ae5d7 main, S4 mantido be0cad9); compose a2-cracha com Dockerfile do VER-2, entrypoint sh -c "ln -sf /dados/db.db /app/backend/db/db.db && exec python main.py", volume a2-cracha-dados, ACCESS_EVENT_KEY=${A2_ACCESS_EVENT_KEY:-}; secrets.exemplo (chave opcional + aviso admin/admin123); a2.sh confere /app/ e /admin; limpar.sh com backup do web-app; validar-a2-fluxo.sh com rotas do web-app (401 sem login/chave, aviso se admin123 ainda vale, com logout); READMEs; pendência VER-2 no CLAUDE.md.
+- Validado (fora da Jetson): bash -n nos 3 scripts; YAML e variáveis do compose (pyyaml); COPY do Dockerfile do web-app existem no 19ead4e; SQLite por link → db, -wal e -shm no destino, reabre com dados. NÃO validado: docker compose config (sem plugin local), shellcheck (ausente), build da imagem (sem acesso ao docker aqui).
+- Próximo: commit (se o usuário pedir); na Jetson: git pull; cp a2.secrets.env.exemplo a2.secrets.env (A2_AES_KEY = 32 "a"); vídeo /var/lib/ods/videos/portaria.mp4 com QR; ./ods.sh trocar a2; validar-sistema.sh a2; validar-a2-fluxo.sh; ./a2.sh testar.
+
+### 2026-11-17 — troca de foco: A5 (decisão do usuário)
+- Usuário: "Vamos com A5. Rodar a2 seria meio difícil por algumas questões." O A2 fica preparado (alterações locais, sem commit) e sai de foco.
+- Próximo: levantar o estado do A5 (build de 13/11) contra os repos atuais (a5, i9, i1, i2, i3, s1, s3, s4, s2).
+- Levantamento A5 (17/11): a5 main c634433 (sem commits novos), i9 main 8ae3933 (idem), i2/s1/p4 iguais ao A8; s3 main 1a322c4 só docs/instalador (pode subir); s2 develop 7c0e841 segue SEM Kafka (C09 continua bloqueado).
+- ACHADO: a develop do I1 (cb5c381, a mesma do A8 em GPU) traz I1/artifacts/app-epi/1.0.0 (ONNX 44 MB, classes pessoa/capacete/colete, mAP50 0,95; B5 publicou em 20/10). O I9 (config/policy.json) usa exatamente essas classes. → A5 pode ter detecção REAL de EPI na GPU (antes: modelo de placas só p/ transporte). CLAUDE.md (pendência MOD-1/B5 "sem modelo de EPI") está desatualizado.
+- I9 sem I3: segue, só marca o estado da calibração. P4: source_id = file_<stem do arquivo> → vídeo de EPI próprio (ex.: epi.mp4 → file_epi); cam0.mp4 é de estacionamento, não serve para EPI.
+- Plano: A5 com I1 GPU igual ao A8 (Dockerfile.jetson, l4t-tensorrt, i1-engine, I1_PACOTE=app-epi/1.0.0), VIDEO_ARQUIVO configurável, zonas e aceite pelo source_id do vídeo, C10 passa a medir detecção real; a5.sh com checar_gpu/pasta de engines/liberar_memoria/preparar_engine.
+- Feito (A5, 17/11): a5.env (S3 1a322c4, I1 develop cb5c381 em GPU, I1_PACOTE=app-epi/1.0.0, I1_ENGINES_DIR, I1_BASE_IMAGE, VIDEO_ARQUIVO=epi.mp4, VIDEO_SOURCE_ID=file_epi; sem MODELOS_DIR/I1_ONNX); compose: i1 = I1 GPU do A8 + i1-engine, p4/s4 com VIDEO_ARQUIVO, p4 espera i1-engine, aceite com VIDEO_SOURCE_ID/I1_PACOTE; zonas com file_epi; a5.sh com checar_gpu, pasta de engines, preparar_engine_i1 (no pos_subida), liberar_memoria, tocar_video, coerência VIDEO_ARQUIVO↔VIDEO_SOURCE_ID↔zonas; testar = itens simulados → espera "passo externo 'video'" → vídeo → passo → restart s4; aceite_a5.py: C10 detecção real (exige app-epi-1.0.0-fp16 + pessoa), C12 I9 no vídeo, C13 I2→S1, amostra de 50 msgs reais por tópico no contrato; docs (README builds/validacao, relatório, CLAUDE.md MOD-1/B5 e nota A3/A4/A5).
+- Validado (fora da Jetson): bash -n; py_compile + pyflakes (limpo); YAML/variáveis do compose; commits fixados existem; Dockerfile.jetson copia I1/ (app-epi entra na imagem); aceite contra Kafka/API falsos (scratchpad/sim-a5): ok → 11 PASSOU; cpu → C10 FALHOU; sem_pessoa → C10/C12 AVISO; sem_i9 → C12 FALHOU; sem_video → C10/C12/C13 BLOQUEADO. NÃO validado: docker compose config, shellcheck, execução na placa.
+- Pendente com o usuário: vídeo de EPI (/var/lib/ods/videos/epi.mp4, pessoas com/sem capacete e colete, H.264, ~1280x720); commit.

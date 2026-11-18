@@ -33,7 +33,7 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 | A2 | a2, a2-cracha, i6, s4 | — | 8000, 8001, 8082 | P4 (I6 não lê o P4) |
 | A3 | a3, s3, i2, s1 | `./a3.sh video` (p4+i1) · `./a3.sh cadeia` (s4, s5) | 8501 | S2 (sem Kafka) |
 | A4 | a4-back, a4-front, i2, s1, s4 | `./a4.sh calibrar` (i3) · `./a4.sh video` (p4+i1 com modelo app-volei) · `cadeia`: s5 | 3000, 8000, 18084 | P7 (sem Kafka) |
-| A5 | a5-backend, a5-frontend, s3, s4 | `./a5.sh cadeia` (i9, i2, s1) · `./a5.sh video` | 8095 | S2 (sem Kafka) |
+| A5 | a5-backend, a5-frontend, s3, s4 | `./a5.sh cadeia` (i9, i2, s1) · `./a5.sh video` (p4 + i1 na GPU com o modelo de EPI `app-epi`; vídeo `VIDEO_ARQUIVO`) | 8095 | S2 (sem Kafka) |
 | A6 | a6, s6 (do repo i4) | `./a6.sh amostra` (sinal do léxico como I4) | 8086 | I4 ao vivo (servidor C++ próprio), P4/P5/S4 |
 | A7 | a7 | `./a7.sh fala` (I5 transcreve um áudio) | 8000 | P5 (sem Kafka), S3/S4/S5 |
 | A8 | ver `a8/` (validada na Jetson em 12/11/2026) | | 3000, 8081 | S2 |

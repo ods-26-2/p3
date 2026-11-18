@@ -14,6 +14,7 @@ O contexto geral está em [`../README.md`](../README.md); o resultado e a análi
 | `s3` | `ods-s3:<S3_REF>` | — | alertas com ROUTING do A5 |
 | `s4` | `ods-s4:<S4_REF>` | 127.0.0.1:18084 | evidência |
 | `i9, i2, s1 (cadeia)` | `ods-i9/ods-i2/ods-s1` | — | EPI relacional, rastreio, zonas |
+| `p4, i1, i1-engine (video)` | `ods-p4`, `ods-i1-gpu:<I1_REF>` | — | vídeo `VIDEO_ARQUIVO` (source_id `file_<nome>`); I1 na GPU (TensorRT) com o modelo de EPI `app-epi` 1.0.0 do B5; mesma imagem do I1 do A8 |
 
 Projeto Docker `ods-a5`. O código fica nos repositórios das equipes; a composição, em `builds/a5/`.
 

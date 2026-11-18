@@ -2,33 +2,44 @@
 """Teste de aceitação do A5 · EPI / segurança (P3 / SIS-1).
 
 Cadeia da 6c: P4 -> I1 -> I9 -> S2 -> S3 -> A5, com S4 gravando a evidência do evento.
-O S2 ainda não publica no Kafka e não há modelo de EPI para o I1. O teste injeta:
-  - um ods.s2.event PPE_NON_COMPLIANT (entrada simulada: S2), para exercitar
+O S2 ainda não publica no Kafka. O teste:
+  - injeta um ods.s2.event PPE_NON_COMPLIANT (entrada simulada: S2), para exercitar
     S3 (ROUTING routing-a5-1) -> ods.s3.alert -> A5, a gravação automática do S4 e o
     reconhecimento do alerta pela API do A5 (A5 -> ods.s3.alert_action.command -> S3);
-  - um ods.i1.detections com pessoa, capacete e colete (entrada simulada: I1), para ver o I9
-    publicar ods.i9.ppe_compliance (só se a cadeia estiver de pé: ./a5.sh cadeia).
+  - injeta um ods.i1.detections com pessoa, capacete e colete (entrada simulada: I1), para ver
+    o I9 publicar ods.i9.ppe_compliance;
+  - depois pede o vídeo (passo externo "video": o a5.sh toca VIDEO_ARQUIVO pelo P4) e mede a
+    cadeia real: I1 na GPU com o modelo de EPI do B5 -> I9, e I1 -> I2 -> S1.
+Os itens simulados vêm antes do vídeo porque a sessão nova do P4 esvazia o buffer do S4.
 """
 
 import os
 import sys
 import uuid
+from collections import Counter
 
 sys.path.insert(0, "/comum")
 from ods_aceite import (AVISO, BLOQUEADO, FALHOU, PASSOU, Barramento, Teste, envelope,  # noqa: E402
-                        http, iso, payload, pronto)
+                        esperar_passo, http, iso, payload, pronto)
 
 API = os.environ.get("A5_API", "http://a5-backend:8000")
 SENHA = os.environ["A5_ADMIN_SENHA"]
-FONTE = os.environ.get("VIDEO_SOURCE_ID", "file_cam0")
+FONTE = os.environ.get("VIDEO_SOURCE_ID", "file_epi")
+# artifact_id-artifact_version do pacote do I1 (app-epi/1.0.0 -> app-epi-1.0.0)
+PACOTE = os.environ.get("I1_PACOTE", "app-epi/1.0.0").replace("/", "-")
 ZONA, EPI = "galpao-solda", "luva"
+CLASSES_EPI = {"pessoa", "capacete", "colete"}
+# Quantas mensagens reais por tópico entram na validação de contrato (o vídeo gera milhares).
+AMOSTRA_CONTRATO = 50
 
 
 def main() -> int:
-    t = Teste("a5", "S2 simulado -> S3 -> A5 (+ S4 automático e reconhecimento), I1 simulado -> I9")
+    t = Teste("a5", "S2 simulado -> S3 -> A5 (+ S4 automático e reconhecimento), I1 simulado -> I9, "
+                    "vídeo real: P4 -> I1 (GPU, EPI) -> I9 e I2 -> S1")
     bus = Barramento("A5-ACEITE")
     pronto(bus, ["ods.s2.event", "ods.s3.alert", "ods.s3.alert_action.command", "ods.s3.alert_action.reply",
-                 "ods.s4.clip", "ods.i1.detections", "ods.i9.ppe_compliance"], "observador do A5")
+                 "ods.s4.clip", "ods.i1.detections", "ods.i9.ppe_compliance", "ods.session.started",
+                 "ods.i2.tracks", "ods.s1.position", "ods.s1.zone_transition"], "observador do A5")
 
     codigo, sessao_login = http("POST", f"{API}/auth/login", {"id": "administrador", "senha": SENHA})
     token = sessao_login.get("token") if codigo == 200 and isinstance(sessao_login, dict) else None
@@ -53,7 +64,7 @@ def main() -> int:
     clipes = bus.esperar(lambda: [m for m in bus.mensagens("ods.s4.clip") if payload(m).get("event_id") == event_id], 45) or []
     t.registrar("C03", "S4 grava a evidência do evento automaticamente (ods.s4.clip)", PASSOU if clipes else FALHOU,
                 f"clip {payload(clipes[0]).get('clip_id')}" if clipes else
-                "sem clipe do evento (o S4 tem o vídeo cam0.mp4 no buffer?)")
+                "sem clipe do evento (o S4 tem o vídeo VIDEO_ARQUIVO no buffer?)")
     if alertas:
         com_clipe = bus.esperar(lambda: [m for m in bus.mensagens("ods.s3.alert")
                                          if payload(m).get("alert_id") == alert_id and payload(m).get("clip_id")], 20)
@@ -95,15 +106,80 @@ def main() -> int:
                     "sem ods.i9.ppe_compliance: a cadeia está de pé (./a5.sh cadeia)? O I9 pode esperar o "
                     "PPE_CATALOG do A5 em ods.artifact.published")
     t.registrar("C09", "Eventos de EPI do S2 a partir do I9", BLOQUEADO, "o S2 ainda não publica no Kafka")
-    t.registrar("C10", "Detecção real de EPI no vídeo", BLOQUEADO, "não há modelo de EPI publicado pelo B5/MOD-1")
+
+    # Vídeo real: P4 -> I1 (GPU, modelo de EPI) -> I9 · I1 -> I2 -> S1 ---------------------
+    if not esperar_passo(bus, "video", 1800):
+        for cod, desc in (("C10", "Detecção real de EPI no vídeo (I1 na GPU)"),
+                          ("C12", "I9 avalia o EPI das pessoas do vídeo"),
+                          ("C13", "Rastreio e zonas do vídeo (I2 -> S1)")):
+            t.registrar(cod, desc, BLOQUEADO, "o vídeo não foi tocado (passo 'video' não chegou)")
+        sessao_video = None
+    else:
+        bus.esperar(lambda: False, 20)  # deixa chegar o fim da cadeia (I9, I2, S1)
+        sessoes = [m.get("session_id") for m in bus.mensagens("ods.session.started")
+                   if m.get("source_id") == FONTE or payload(m).get("source_id") == FONTE]
+        sessao_video = sessoes[-1] if sessoes else None
+
+        def do_video(m: dict) -> bool:
+            if sessao_video:
+                return m.get("session_id") == sessao_video
+            return m.get("source_id") == FONTE and m.get("session_id") != sessao_i1
+
+        dets = bus.mensagens("ods.i1.detections", do_video)
+        classes = Counter(d.get("class") for m in dets for d in payload(m).get("detections", []))
+        versoes = sorted({str(m.get("artifact_version")) for m in dets})
+        gpu = bool(versoes) and all(v.startswith(PACOTE) and v.endswith("-fp16") for v in versoes)
+        detalhe = (f"{len(dets)} quadro(s), sessão {sessao_video or '?'}, classes {dict(classes)}, "
+                   f"artifact_version {versoes}")
+        if not dets:
+            t.registrar("C10", "Detecção real de EPI no vídeo (I1 na GPU)", FALHOU,
+                        f"nenhum ods.i1.detections de {FONTE} (o I1 subiu? veja logs do i1 e do i1-engine)")
+        elif not gpu:
+            t.registrar("C10", "Detecção real de EPI no vídeo (I1 na GPU)", FALHOU,
+                        f"{detalhe}: esperado {PACOTE}-fp16 (TensorRT); o I1 caiu para a CPU ou outro modelo?")
+        elif not classes.get("pessoa"):
+            t.registrar("C10", "Detecção real de EPI no vídeo (I1 na GPU)", AVISO,
+                        f"{detalhe}: nenhuma pessoa detectada (o vídeo tem trabalhadores?)")
+        else:
+            t.registrar("C10", "Detecção real de EPI no vídeo (I1 na GPU)", PASSOU, detalhe)
+        t.extras["video"] = {"source_id": FONTE, "sessao": sessao_video, "quadros_i1": len(dets),
+                             "classes": dict(classes), "artifact_version": versoes,
+                             "classes_fora_do_modelo": sorted(set(classes) - CLASSES_EPI)}
+
+        avals = bus.mensagens("ods.i9.ppe_compliance", do_video)
+        estados = Counter(f"{i.get('equipment_item')}:{i.get('compliance')}"
+                          for m in avals for i in payload(m).get("items", []))
+        if avals:
+            t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", PASSOU,
+                        f"{len(avals)} avaliação(ões): {dict(estados)}")
+        elif classes.get("pessoa"):
+            t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", FALHOU,
+                        "o I1 detectou pessoas, mas o I9 não publicou ods.i9.ppe_compliance da sessão")
+        else:
+            t.registrar("C12", "I9 avalia o EPI das pessoas do vídeo", AVISO, "sem pessoas detectadas no vídeo")
+        t.extras["video"]["i9"] = {"avaliacoes": len(avals), "estados": dict(estados)}
+
+        trilhas = bus.mensagens("ods.i2.tracks", do_video)
+        posicoes = bus.mensagens("ods.s1.position", do_video)
+        transicoes = bus.mensagens("ods.s1.zone_transition", do_video)
+        no_galpao = [m for m in transicoes if payload(m).get("zone_id") == ZONA]
+        t.registrar("C13", "Rastreio e zonas do vídeo (I2 -> S1)",
+                    PASSOU if trilhas and posicoes else (AVISO if dets else FALHOU),
+                    f"I2 {len(trilhas)}, S1 posições {len(posicoes)}, transições {len(transicoes)} "
+                    f"({len(no_galpao)} em {ZONA}); zonas de exemplo do P3, em pixels")
+
+    contagem_real: Counter = Counter()
 
     def deste_teste(topico: str, m: dict) -> bool:
         if topico == "ods.s3.alert":
             return payload(m).get("event_id") == event_id or payload(m).get("alert_id") == alert_id
         if topico == "ods.s4.clip":
             return payload(m).get("event_id") == event_id
-        if topico == "ods.i9.ppe_compliance":
-            return m.get("session_id") == sessao_i1
+        if topico == "ods.i9.ppe_compliance" and m.get("session_id") == sessao_i1:
+            return True
+        if sessao_video and m.get("session_id") == sessao_video and contagem_real[topico] < AMOSTRA_CONTRATO:
+            contagem_real[topico] += 1
+            return True
         return False
 
     t.validar_contratos("C11", bus, incluir=deste_teste)

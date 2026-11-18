@@ -1,5 +1,5 @@
 # ODS — build do A5 · EPI / segurança (VER-3)
-# Montada a partir do código atual (main, 13/11/2026), não só do plano 6c.
+# Montada a partir do código atual (main; revisada em 17/11/2026), não só do plano 6c.
 #
 # O que o código do A5 usa no Kafka (A5_BUS=kafka; docs/kafka.md do A5):
 #   ods.s3.alert, ods.s3.alert_action.*, ods.s3.alerts.*   (S3)
@@ -12,13 +12,15 @@
 #   a5-backend   API (FastAPI) em 127.0.0.1:8000; o acesso é pelo nginx do front
 #   a5-frontend  interface (porta 8095) e registro de artefatos em /registro
 #   s3           alertas · VER-3, com o ROUTING de exemplo do A5 que vem na imagem do S3
-#   s4           evidência de mídia, lendo VIDEO_DIR/cam0.mp4
+#   s4           evidência de mídia, lendo VIDEO_DIR/VIDEO_ARQUIVO
 #   i9, i2, s1   perfil "cadeia": EPI relacional, rastreio e zonas (alimentariam o S2)
-#   p4, i1       perfil "video": toca VIDEO_DIR/cam0.mp4 uma vez
+#   p4, i1       perfil "video": toca VIDEO_DIR/VIDEO_ARQUIVO uma vez; I1 na GPU com o modelo
+#                de EPI do B5 (app-epi 1.0.0: pessoa, capacete, colete), como o I1 do A8
+#   i1-engine    perfil "video", one-shot: compila a engine TensorRT só se faltar
 #
 # Fora: S2 (sem Kafka) — sem ele não há ods.s2.event, então nenhum alerta automático de EPI
-# nasce da cadeia; os alertas do A5 hoje vêm de comandos. Não há modelo de EPI publicado para
-# o I1 (B5/MOD-1): a cadeia prova o transporte até o I9, não a detecção de EPI.
+# nasce da cadeia (P4 -> I1 -> I9 para no ods.i9.ppe_compliance); os alertas do A5 hoje vêm de
+# comandos. O I3 continua simulado dentro do A5 (decisão do VER-3), e o I9 roda sem calibração.
 #
 # Uso: ./a5.sh · ./a5.sh cadeia · ./a5.sh video · ./a5.sh status · ./a5.sh parar
 
@@ -109,7 +111,7 @@ services:
       ODS_S4_KAFKA_BROKERS: ${KAFKA_BROKER}
       ODS_S4_KAFKA_GROUP_ID: s4-media-evidence-a5
       ODS_S4_KAFKA_CLIENT_ID: s4
-      ODS_S4_SOURCE: /videos/cam0.mp4
+      ODS_S4_SOURCE: /videos/${VIDEO_ARQUIVO:?defina VIDEO_ARQUIVO}
       ODS_S4_FPS: ${VIDEO_FPS:-10}
     volumes:
       - s4-dados:/data
@@ -196,7 +198,8 @@ services:
     ipc: shareable
     environment:
       P4_SOURCE: file
-      P4_VIDEO_PATH: /videos/cam0.mp4
+      # source_id publicado: file_<nome sem extensão> (epi.mp4 -> file_epi = VIDEO_SOURCE_ID)
+      P4_VIDEO_PATH: /videos/${VIDEO_ARQUIVO:?defina VIDEO_ARQUIVO}
       P4_MODO_DIAGNOSTICO: "false"
       P4_ATIVAR_KAFKA: "true"
       P4_KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
@@ -205,28 +208,67 @@ services:
       - p4-shm:/tmp
     depends_on:
       kafka-topicos: { condition: service_completed_successfully }
+      # O P4 toca o vídeo uma vez só: espera a engine do I1 existir para não perder quadros
+      # enquanto ela compila (minutos na primeira vez).
+      i1-engine: { condition: service_completed_successfully }
+
+  i1-engine:
+    # One-shot · P3 (o mesmo do A8). Garante a engine TensorRT do pacote I1_PACOTE em
+    # I1_ENGINES_DIR: se já existe e carrega, termina em segundos; senão roda o p2-build (FP16,
+    # ~7 min na primeira vez). Usa a imagem do serviço i1.
+    image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
+    # Imagem local (construída pelo serviço i1); não existe em registro nenhum.
+    pull_policy: never
+    profiles: [video]
+    restart: "no"
+    runtime: nvidia
+    environment:
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+    volumes:
+      - ${I1_ENGINES_DIR:?defina I1_ENGINES_DIR}:/opt/ods/engines
+      - ../comum/i1/preparar-engine.sh:/p3/preparar-engine.sh:ro
+    command: ["sh", "/p3/preparar-engine.sh", "/app/I1/artifacts/${I1_PACOTE:?defina I1_PACOTE}", "FP16"]
 
   i1:
-    # Detecção · MOD-1. Modelo em I1_ONNX/I1_METADATA (a5.env); CPU (ultralytics).
-    build: ${SRC_DIR}/i1
-    image: ods-i1:${I1_REF:?fixe o commit do i1}
+    # Detecção · MOD-1. Modelo de EPI do B5 (app-epi 1.0.0: pessoa, capacete, colete), na GPU
+    # (TensorRT via P2). A mesma imagem do A8 (ods-i1-gpu:<ref>, Dockerfile.jetson do I1).
+    # CONTORNO DO P3 (o mesmo do A8): a base l4t-jetpack do Dockerfile.jetson gera imagem de
+    # 16,5 GB; pelo ARG BASE_IMAGE usamos a l4t-tensorrt runtime. Para desfazer: tire o "args".
+    # P2_BACKEND=trt: sem TensorRT o P2 dá erro em vez de cair calado para a CPU.
+    # Prova de GPU: artifact_version das mensagens termina em "-fp16" (app-epi-1.0.0-fp16).
+    build:
+      context: ${SRC_DIR}/i1
+      dockerfile: Dockerfile.jetson
+      args:
+        BASE_IMAGE: ${I1_BASE_IMAGE:?defina I1_BASE_IMAGE}
+    image: ods-i1-gpu:${I1_REF}
     profiles: [video]
+    # O I1 ainda sai com código 1 no fim do vídeo ("Control socket has closed"); esperado.
     restart: on-failure:5
     ipc: "service:p4"
+    runtime: nvidia
     environment:
       ODS_KAFKA_BROKER: ${KAFKA_BROKER}
-    # PROVISÓRIO (o mesmo do A8): o run_detector.py (30df178) usa "os" e "BROKER_ENV_VAR" sem
-    # importá-los. Quando a MOD-1 corrigir, volte para ["python3", "I1/run_detector.py", <argumentos>].
-    command: ["python3", "-c",
-              "import builtins, os, runpy, sys; from detector.config import BROKER_ENV_VAR; builtins.os = os; builtins.BROKER_ENV_VAR = BROKER_ENV_VAR; sys.argv = ['I1/run_detector.py'] + sys.argv[1:]; runpy.run_path('I1/run_detector.py', run_name='__main__')",
-              "--backend", "ultralytics",
-              "--onnx", "${I1_ONNX}", "--metadata", "${I1_METADATA}",
-              "--source", "p4_file", "--max-frames", "1000000", "--conf", "0.50",
-              "--mode", "kafka", "--output-jsonl", "/app/i1-eventos.jsonl"]
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+    # CONTORNO DO P3 (o mesmo do A8): espera o socket dos quadros do P4 existir (até 60 s) para
+    # não cair e reiniciar no começo do vídeo. Para desfazer: deixe só o comando a partir do "exec".
+    command:
+      - sh
+      - -c
+      - >-
+        i=0; while [ ! -S /tmp/p4_file_shm ] && [ $$i -lt 120 ]; do sleep 0.5; i=$$((i+1)); done;
+        exec python3 I1/run_detector.py --backend p2
+        --metadata /app/I1/artifacts/${I1_PACOTE}/metadata.json
+        --source p4_file --max-frames 1000000 --conf 0.50
+        --mode kafka --output-jsonl /app/i1-eventos.jsonl
     volumes:
       - p4-shm:/tmp
-      - ${MODELOS_DIR:?defina MODELOS_DIR}:/modelos:ro
-    depends_on: [p4]
+      - ${I1_ENGINES_DIR}:/opt/ods/engines:ro
+    depends_on:
+      p4: { condition: service_started }
+      i1-engine: { condition: service_completed_successfully }
 
 
   aceite:
@@ -245,7 +287,8 @@ services:
       RESULT_DIR: /resultados
       B4_DIR: /b4
       A5_ADMIN_SENHA: ${A5_ADMIN_SENHA}
-      VIDEO_SOURCE_ID: file_cam0
+      VIDEO_SOURCE_ID: ${VIDEO_SOURCE_ID:?defina VIDEO_SOURCE_ID}
+      I1_PACOTE: ${I1_PACOTE}
     command: ["python", "-u", "/aceite/aceite_a5.py"]
     volumes:
       - ./aceite:/aceite:ro

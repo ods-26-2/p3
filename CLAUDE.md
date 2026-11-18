@@ -221,7 +221,7 @@ cd /opt/ods/p3/builds/a8
 - **O S4 esvazia o buffer a cada `ods.session.started`.** Como lê o MP4 só na partida, reinicie o S4 depois de tocar o vídeo do P4. O `a8.sh testar` já faz isso.
 - **O S5 só publica janelas com dados,** e uma vaga fica "ocupada" depois do fim do vídeo, até a próxima sessão.
 - **P2 / TensorRT:** o I1 do A8 roda na GPU (teste individual `validacao/i1/testar-i1-gpu.sh` passou na Jetson em 14/11/2026; engine FP16 compila em ~7 min na primeira vez).
-  - As imagens `l4t-*` da NVIDIA imprimem um aviso "== CUDA ==" no stdout de todo container: para ler a saída num script, use `docker run --entrypoint ""` ou só a última linha. A3/A4/A5 ainda usam o I1 antigo em CPU; o I7 continua em CPU.
+  - As imagens `l4t-*` da NVIDIA imprimem um aviso "== CUDA ==" no stdout de todo container: para ler a saída num script, use `docker run --entrypoint ""` ou só a última linha. A3/A4 ainda usam o I1 antigo em CPU (o A5 passou para a GPU em 17/11/2026, com o modelo `app-epi`); o I7 continua em CPU.
   - O I1 roda `--backend ultralytics` (ONNX Runtime CPU) e instala `p2[cpu]`; o I7 usa PyTorch CPU.
   - **Base da imagem com TensorRT:** a `l4t-jetpack:r36.4.0` (padrão do `Dockerfile.jetson` do I1) gerou uma imagem de **16,5 GB** e encheu o disco (13/11/2026). Use a `nvcr.io/nvidia/l4t-tensorrt:r10.3.0-runtime` (4,5 GB, mesmo TensorRT 10.3, já na placa) via `ARG BASE_IMAGE` (`I1_BASE_IMAGE` no `a8.env`). O BuildKit embute a base na imagem: ela não aparece separada no `docker images`.
   - **Testes do próprio I1 no serviço** (`validacao/i1/testar-i1-servico.sh`, Jetson 14/11/2026): 39 de 40 da suíte `I1/tests` passam dentro do serviço `i1` da build (o `test_05` precisa do `ultralytics`, ausente na imagem Jetson), e o `CMD` padrão do `Dockerfile.jetson` roda com código 0 e `-fp16`.
@@ -306,7 +306,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | VER-6 (A3) | Broker fixo no código (`34.66.235.91:9093`); sem Dockerfile/requirements; código novo só na `dev` |
 | INV-1 (A4) | Sem Dockerfile no back e no front |
 | VER-3 (I9) | Sem Dockerfile; dataset de 323 MB no repositório |
-| MOD-1 (B5) | Sem modelo de pessoas nem de EPI para o I1 (A3 e A5 usam o de placas só para provar o transporte) |
+| MOD-1 (B5) | (17/11) O pacote `app-epi` 1.0.0 (pessoa, capacete, colete) já está na develop do I1 e no B5: o A5 usa; o A3 ainda usa o de placas (pode passar a usar o `app-epi` pela classe `pessoa`). Falta engine compilada publicada (`p2-build`) |
 | INV-2 (I4, S6) | Repo `s6` vazio (S6 está em `i4/s6_synthesis`); I4 ao vivo depende de servidor C++ próprio |
 | VER-4 (A7, I5) | Sem Dockerfile; I5 com `float16` padrão (GPU); A7 escuta `ods.s5.event.metrics` (6c: `ods.s5.event_metrics`) |
 | SIS-2 (P5, P7) | Só scripts de hardware, sem Kafka: A6/A7 ficam sem P5 e A1/A4 sem P7 |

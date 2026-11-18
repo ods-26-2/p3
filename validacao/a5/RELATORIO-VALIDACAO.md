@@ -42,15 +42,17 @@ porque X ainda não existe no Kafka.
 |---|---|---|---|---|
 | C01 | Login do administrador | PASSOU | — |  |
 | C02 | S3 cria o alerta (S2 simulado) | PASSOU | — |  |
-| C03 | S4 grava o evento | PASSOU | — | o S4 precisa de cam0.mp4 no buffer |
+| C03 | S4 grava o evento | PASSOU | — | o S4 precisa do VIDEO_ARQUIVO no buffer |
 | C04 | Clipe no alerta | PASSOU ou AVISO | — |  |
 | C05 | Alerta no A5 | PASSOU | — |  |
 | C06 | Reconhecimento vira comando ao S3 | PASSOU | — |  |
 | C07 | Alerta ACKNOWLEDGED | PASSOU | — |  |
 | C08 | I9 avalia o EPI (I1 simulado) | PASSOU ou AVISO | — | o I9 pode esperar o PPE_CATALOG do A5 |
 | C09 | Eventos de EPI do S2 | BLOQUEADO | — | S2 sem Kafka |
-| C10 | Detecção real de EPI | BLOQUEADO | — | sem modelo |
+| C10 | Detecção real de EPI (I1 na GPU, `app-epi-1.0.0-fp16`) | PASSOU | — | AVISO se o vídeo não tiver pessoas; FALHOU se cair para CPU |
 | C11 | Envelope 1.0 | a confirmar | — |  |
+| C12 | I9 avalia o EPI das pessoas do vídeo | PASSOU | — | sem calibração do I3 |
+| C13 | Rastreio e zonas do vídeo (I2 → S1) | PASSOU | — | zona de exemplo do P3, em pixels |
 
 ## Conclusão
 
