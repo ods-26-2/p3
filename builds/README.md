@@ -38,6 +38,12 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 | A7 | a7 | `./a7.sh fala` (I5 transcreve um áudio) | 8000 | P5 (sem Kafka), S3/S4/S5 |
 | A8 | ver `a8/` (validada na Jetson em 12/11/2026) | | 3000, 8081 | S2 |
 
+## Serviços permanentes
+
+| Build | Sobe | Uso | Guia |
+|---|---|---|---|
+| `i1/` | `kafka-topicos`, `i1` (orquestrador do I1 `3b2a9cc`, GPU, `restart: unless-stopped`) · `./i1.sh engines` (engines de `I1_PACOTES`) | Fica de pé enquanto as aplicações trocam. Pedidos em `ods.i1.command` (`START`/`HEARTBEAT`/`STOP` por equipe), detecções em `ods.i1.detections`. O `./ods.sh trocar` não a remove, e o `limpar.sh --imagens` das apps mantém a imagem dela | [`validacao/i1/GUIA-BUILD-I1.md`](../validacao/i1/GUIA-BUILD-I1.md) |
+
 ## Estrutura comum
 
 - `comum/lib.sh`: funções de subir/status/parar/limpar usadas pelos `<app>.sh` e `limpar.sh`.

@@ -53,6 +53,9 @@ export UID_GID
 PROJETO="ods-$APP"
 # Imagens que nenhuma limpeza pode remover (Kafka da turma e bases do SIS-1).
 PROTEGIDAS='^(confluentinc/cp-kafka|nvcr\.io/nvidia/l4t|ods/base-gpu)'
+# Builds de serviços permanentes (ficam de pé enquanto as aplicações trocam): as imagens delas
+# nunca saem na limpeza de outra build.
+ODS_PERMANENTES=(i1)
 
 if [[ -t 1 ]]; then V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; N=$'\e[0m'; else V=; A=; R=; N=; fi
 ok()    { echo "${V}✔${N} $*"; }
@@ -128,16 +131,23 @@ checar_segredos() {
   ok "segredos preenchidos"
 }
 
+# KAFKA_CONTAINER: nome do container do broker NESTA placa (padrão "kafka", o da turma). Vazio no
+# <app>.env quando o broker é remoto (ex.: o da nuvem): aí só a resposta do broker é conferida.
 checar_kafka() {
-  local estado
-  estado=$(docker ps -a --filter name='^kafka$' --format '{{.Status}}' || true)
-  [[ -n "$estado" ]] || erro "o container 'kafka' da turma não existe nesta placa."
-  [[ "$estado" == Up* ]] || erro "o Kafka da turma está parado ($estado). Avise o grupo dono; para religar: docker start kafka"
+  local estado conteiner=${KAFKA_CONTAINER-kafka}
+  if [[ -n "$conteiner" ]]; then
+    estado=$(docker ps -a --filter name="^${conteiner}\$" --format '{{.Status}}' || true)
+    [[ -n "$estado" ]] || erro "o container '$conteiner' da turma não existe nesta placa."
+    [[ "$estado" == Up* ]] || erro "o Kafka da turma está parado ($estado). Avise o grupo dono; para religar: docker start $conteiner"
+  fi
   if docker run --rm "$KAFKA_IMG" kafka-broker-api-versions --bootstrap-server "$KAFKA_BROKER" 2>/dev/null \
        | grep -q -- '-> ('; then
-    ok "Kafka da turma respondendo em $KAFKA_BROKER"
+    ok "Kafka respondendo em $KAFKA_BROKER"
+  elif [[ -n "$conteiner" ]]; then
+    erro "o Kafka da turma está de pé, mas não responde em $KAFKA_BROKER (listener mudou? veja docker inspect $conteiner)."
   else
-    erro "o Kafka da turma está de pé, mas não responde em $KAFKA_BROKER (listener mudou? veja docker inspect kafka)."
+    erro "o Kafka não responde em $KAFKA_BROKER (broker fora do ar, porta bloqueada ou endereço mudou?).
+  Teste à mão: docker run --rm $KAFKA_IMG kafka-broker-api-versions --bootstrap-server $KAFKA_BROKER"
   fi
 }
 
@@ -360,13 +370,18 @@ remover_imagens() {
   local manter=$1 img
   local -A protegida=()
   if [[ -n "$manter" ]]; then
-    while read -r img; do [[ -n "$img" ]] && protegida[$img]=1; done < <(imagens_de_outra_app "$manter")
+    while read -r img; do [[ -n "$img" ]] && protegida[$img]=$manter; done < <(imagens_de_outra_app "$manter")
   fi
+  local perm
+  for perm in "${ODS_PERMANENTES[@]}"; do
+    [[ "$perm" != "$APP" && -f "$ODS_DIR_BUILDS/$perm/$perm.env" ]] || continue
+    while read -r img; do [[ -n "$img" ]] && protegida[$img]=$perm; done < <(imagens_de_outra_app "$perm")
+  done
   local alvo=()
   while read -r img; do
     [[ -n "$img" ]] || continue
     [[ "$img" =~ $PROTEGIDAS ]] && continue
-    if [[ -n "${protegida[$img]:-}" ]]; then echo "  mantida (o $manter usa): $img"; continue; fi
+    if [[ -n "${protegida[$img]:-}" ]]; then echo "  mantida (o ${protegida[$img]} usa): $img"; continue; fi
     docker image inspect "$img" >/dev/null 2>&1 && alvo+=("$img")
   done < <(imagens_da_build)
   if (( ${#alvo[@]} == 0 )); then ok "nenhuma imagem da build para remover"; else

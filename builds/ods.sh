@@ -8,6 +8,7 @@
 #   ./ods.sh                       o mesmo que ./ods.sh lista
 #   ./ods.sh lista                 cada build: containers, imagens presentes e espaço
 #   ./ods.sh trocar <app>          remove as outras builds (--imagens) e sobe <app>
+#                                  (a build permanente do I1 fica de pé e com a imagem)
 #   ./ods.sh trocar <app> --dados  idem, apagando também os volumes das outras (pede confirmação de cada uma)
 #   ./ods.sh trocar <app> --codigo idem, apagando também os clones que só as outras usam
 #   ./ods.sh subir <app> [--reconstruir]   só sobe <app> (= builds/<app>/<app>.sh subir)
@@ -32,6 +33,8 @@ erro()  { echo "${R}✘ $*${N}" >&2; exit 1; }
 ajuda() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$SCRIPT"; }
 
 apps() { local d; for d in "$DIR"/a[0-9]*/; do d=${d%/}; d=${d##*/}; [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; }
+# Serviços permanentes (ex.: i1): aparecem na lista, mas o "trocar" não os remove.
+permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; return 0; }
 
 checar_app() {
   [[ -n "${1:-}" ]] || erro "informe a aplicação (ex.: a5). Disponíveis: $(apps | tr '\n' ' ')"
@@ -81,7 +84,7 @@ lista() {
   command -v docker >/dev/null || erro "docker não encontrado"
   printf '%-5s %-12s %-10s %s\n' APP CONTAINERS RODANDO "IMAGENS DA BUILD (ods-*)"
   local app imgs
-  for app in $(apps); do
+  for app in $(apps) $(permanentes); do
     mapfile -t imgs < <(imagens_presentes "$app")
     printf '%-5s %-12s %-10s %s\n' "$app" "$(containers_de "$app" | wc -l)" "$(rodando_de "$app" | wc -l)" \
       "${#imgs[@]} imagens, ~$(tamanho_mb "${imgs[@]}") MB"

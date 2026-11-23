@@ -73,6 +73,7 @@ builds/<app>/                      ex.: builds/a8/
   - **Branches:** a maioria só tem `main`. O S4 usa `master`, o S2 tem a versão mais nova em `develop`, e o **I1 usa sempre a `develop` como base** (decisão do usuário, 14/11/2026).
   - **Sem CI de imagens:** as imagens são **construídas na própria Jetson**, a partir dos clones, no commit fixado.
 - **Barramento:** Kafka. O Guia de Uso do Kafka (TRA-1) **proíbe broker paralelo**: toda build usa o Kafka compartilhado da turma. O repositório `b3` está vazio, e não há configuração do broker versionada.
+- **Arranjo desde 23/11/2026 (usuário):** as aplicações migraram para a nuvem; a Jetson roda as inferências (os I's). O I1 usa o **Kafka da nuvem** `34.66.235.91:9093` (em 23/11 a porta recusou conexão de fora do laboratório: conferir na placa). As builds A1–A8 ainda apontam para o Kafka da placa.
 
 ---
 
@@ -149,6 +150,16 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - Testes (13/11/2026): `./<app>.sh testar` (aceitação pelo Kafka, `builds/comum/aceite/` + `<app>/aceite/`), `validacao/validacao-geral/validar-sistema.sh <app>` (S1–S9) e `validacao/<app>/validar-<app>-fluxo.sh` (API). Testados só fora da placa: Kafka e APIs falsos (caminhos de falha e de sucesso).
 - Validado só fora da Jetson: `bash -n`, checagem estática em Python (variáveis, commits, contextos e `COPY` no commit fixado) e os scripts contra um `docker` simulado. **Falta `docker compose config` real e a execução na placa.**
 
+### Build dedicada do I1 (23/11/2026, simulada fora da placa, ainda não rodada na Jetson)
+
+- `builds/i1/` (projeto `ods-i1`): serviço **permanente**, o orquestrador do I1 (develop `3b2a9cc`, `I1/run_orchestrator.py`), sempre de pé (`restart: unless-stopped`, log com rotação). Ele escuta `ods.i1.command` (`START`/`HEARTBEAT`/`STOP` por equipe; fila FIFO; um modelo por vez na GPU; TTL padrão de 60 s) e publica em `ods.i1.detections`.
+- Engines de `I1_PACOTES` (plates, epi, industry, sports) em `/var/lib/ods/engines`; vídeos em `VIDEO_DIR` (`<SQUAD>.mp4`); sockets do P4 de outra build via `ipc: host` + `I1_P4_DIR` (`/var/lib/ods/p4-shm`) em `/tmp`.
+- `./ods.sh trocar` não a remove; `comum/lib.sh` (`ODS_PERMANENTES`) protege a imagem dela no `limpar.sh --imagens` das apps. A futura build de "todas as inferências" pede ao I1 por comando, sem `i1` próprio.
+- Guia e resultado esperado: `validacao/i1/GUIA-BUILD-I1.md`; teste `./i1.sh testar` (T01–T42).
+- Broker: o da nuvem (`KAFKA_BROKER`; `KAFKA_CONTAINER=` vazio faz a `checar_kafka` da lib não procurar o container `kafka` local).
+- Vídeos das equipes versionados em `assets/` (`VER1.mp4` 4K, `INV1.mp4`, `epi.mp4`); `./i1.sh videos` (também no `subir`) copia para `VIDEO_DIR` e cria os links `<SQUAD>.mp4` de `I1_VIDEOS`. O `cam0.mp4` (VER5) já está na placa.
+- A8 e A5 passaram para o I1 `3b2a9cc` (23/11, só `I1_REF`; não testados com ele).
+
 **Tags no p3:** `a8-minimo-v1` (A8 + I7). A cadeia foi validada em 12/11/2026; a tag `a8-cadeia-v1` foi proposta e precisa ser conferida com o usuário.
 
 ### Composição
@@ -161,7 +172,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 | `i7` | `i7` | Perfil `i7`, sob demanda: lê imagens de `I7_IMAGENS_DIR` e publica placas |
 | `kafka-topicos` | `cp-kafka` | One-shot: cria os tópicos da cadeia no Kafka da turma (`--if-not-exists`) |
 | `p4` | `p4` + Dockerfile do P3 (`dockerfile_inline`) | Perfil `video`: toca `VIDEO_DIR/cam0.mp4` uma vez (source_id `file_cam0`) e termina |
-| `i1` | `i1` (develop `cb5c381`, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>` sobre `l4t-tensorrt:r10.3.0-runtime`, `runtime: nvidia`, `P2_BACKEND=trt`). Teste individual na Jetson em 14/11/2026: 8,1 ms/quadro na GPU × 261 ms na CPU. Dentro do `a8.sh testar` (14/11/2026): 245 detecções na sessão; `artifact_version` `app-plates-1.0.0-fp16` conferido no container |
+| `i1` | `i1` (develop; validado com `cb5c381`, fixado em `3b2a9cc` desde 23/11/2026, `Dockerfile.jetson`) | Perfil `video`; lê os quadros do P4 por SHM (`ipc: service:p4` + volume `p4-shm` em `/tmp`); **GPU/TensorRT via P2** (`ods-i1-gpu:<ref>` sobre `l4t-tensorrt:r10.3.0-runtime`, `runtime: nvidia`, `P2_BACKEND=trt`). Teste individual na Jetson em 14/11/2026: 8,1 ms/quadro na GPU × 261 ms na CPU. Dentro do `a8.sh testar` (14/11/2026): 245 detecções na sessão; `artifact_version` `app-plates-1.0.0-fp16` conferido no container |
 | `i1-engine` | imagem do `i1` | One-shot (perfil `video`): `builds/comum/i1/preparar-engine.sh` compila a engine FP16 em `I1_ENGINES_DIR` só se ela faltar ou não carregar; o `p4` espera por ele |
 | `i2` | `i2` | Contínuo; consome `ods.i1.detections` |
 | `i3` | `i3` | Perfil `i3`, sob demanda (precisa de CSV de correspondências) |
@@ -294,7 +305,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 
 | Equipe | Pendência |
 |---|---|
-| MOD-1 (I1) | Tratar o fechamento do socket do P4 como fim normal (código 0); o P4 começa a tocar sem esperar o I1 carregar a engine (perde ~35 quadros no início): combinar com a SIS-2 um sinal de "pronto" ou o P4 esperar o consumidor |
+| MOD-1 (I1) | Tratar o fechamento do socket do P4 como fim normal (código 0); o P4 começa a tocar sem esperar o I1 carregar a engine (perde ~35 quadros no início): combinar com a SIS-2 um sinal de "pronto" ou o P4 esperar o consumidor; orquestrador (`3b2a9cc`): `ods.i1.command` sem contrato na 6c/B1 (JSON livre, sem envelope); broker padrão da nuvem e vídeos em `/home/sys2/SIS-2/videos` fixos; TTL conta a carga da engine; auto-commit reexecuta comandos enviados com o I1 parado; erros fora de FileNotFound/Runtime/P2Execution/Value derrubam o processo e perdem a fila; START da equipe ativa ignora parâmetros novos; nenhum aviso de pedido aceito/encerrado no Kafka |
 | MOD-2 (S4) | Data dos clipes soma o uptime; tópico de resposta `ods.s4.clip.query.reply` (spec: `ods.s4.clip.reply`) |
 | SIS-2 (P4) e MOD-2 (S4) | Formato da memória compartilhada (P4 manda cabeçalho `P4R1`, S4 espera quadro puro); envelope do P4 fora da 6c |
 | VER-6 (S1, S2) | S2 no Kafka; S1 não "esvazia" zonas no fim da sessão |
@@ -302,7 +313,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | SIS-1 (P2) | Imagem base com TensorRT e engines compilados (`p2-build`) para I1 e I7; SSD NVMe para a placa; o `p2-build` cria a pasta da engine com `mkdtemp` (0700, dona root): só root lê, então um container sem root não carregaria a engine e o usuário `ods` não confere a pasta; decidir se a placa roda com `jetson_clocks` (I1: 25 → 64 quadros/s em 14/11/2026) |
 | TRA-1 (B3) | Kafka da turma sem `restart`, sem autenticação, listeners mudando sem aviso, repo `b3` vazio |
 | VER-1 (A1, I8) | A1 consome `ods.industria.defeito_classificado` (6c: `ods.i8.piece_analysis`); I8 sem modelo treinado no repo (a build usa os mocks 2.0 do próprio I8) |
-| VER-2 (A2, I6) | Código novo só na `develop`; web-app com chave AES fixa (`b"a"*32`) e banco dentro do código; padrão `S4_CAPTURE_REPLY_TOPIC` errado (S4 responde em `ods.s4.capture.reply`); I6 espera socket TCP que o P4 não oferece |
+| VER-2 (A2, I6) | (main `19ead4e`, 17/11) Web-app com chave AES fixa (`b"a"*32`), caminho do banco fixo ao lado do código (a build usa link para volume) e painel com `admin/admin123` sem variável; nada no A2 chama `/access-event` (painel de telemetria sem dados); padrão `S4_CAPTURE_REPLY_TOPIC` errado (S4 responde em `ods.s4.capture.reply`); I6 espera socket TCP que o P4 não oferece |
 | VER-6 (A3) | Broker fixo no código (`34.66.235.91:9093`); sem Dockerfile/requirements; código novo só na `dev` |
 | INV-1 (A4) | Sem Dockerfile no back e no front |
 | VER-3 (I9) | Sem Dockerfile; dataset de 323 MB no repositório |

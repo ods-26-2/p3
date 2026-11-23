@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: A5 (decisão do usuário em 17/11; A2 preparado sem commit, fora de foco)
-- Fase: A5 testado na Jetson com vídeo real (18/11 13:12): PASSOU 9, FALHOU 2 (C03, C11), BLOQUEADO 1 (C09), AVISO 1 (C04)
-- Último resultado: permissões do S3 (5a17aeb) validadas na placa (C06/C07 PASSOU); epi.mp4 é 1920x1080 e a zona cobria 1280x720 (0 transições) → zones-a5-p3-2 em 1920x1080, C13 exige ponto na zona e transição (sem commit)
-- Próximo passo: commit + push; ./a5.sh subir (recria o S1 com a zona nova) e ./a5.sh testar; log do S4 (grep "S2 event") para o C03
-- Bloqueios / perguntas abertas ao usuário: C03 (S4 sem clipe, falta o log); capacete INCORRETO em 102/102 quadros (vídeo ou geometria do I9? olhar um quadro); S2 fora do Kafka impede o tempo real; A2 preparado sem commit
+- Aplicação em foco: build dedicada do I1 (builds/i1), serviço permanente; foco do usuário é testar o I1
+- Fase: escrita, simulada fora da placa e commitada (23/11); NÃO rodada na Jetson
+- Último resultado: broker do I1 = nuvem 34.66.235.91:9093 (KAFKA_CONTAINER vazio); vídeos em assets/ + ./i1.sh videos; A8 e A5 com I1_REF=3b2a9cc (não testados)
+- Próximo passo: usuário dá push/pull na Jetson: cd /opt/ods/p3/builds/i1 && ./i1.sh && ./i1.sh status && pedido manual && ./i1.sh testar (guia validacao/i1/GUIA-BUILD-I1.md, seções 2–6)
+- Bloqueios / perguntas abertas ao usuário: broker da nuvem recusou conexão na 9093 a partir do computador do usuário (conferir da placa); A2 segue sem commit; C03 do A5
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -325,3 +325,40 @@
 - Tempo real (pergunta do usuário): P4 tem modo câmera (IMX519/477 1080p RG10) e o I1 lê /tmp/p4_imx519_shm; o que impede alertas reais é o S2 fora do Kafka (A5 ← ods.s3.alert ← ods.s2.event); S4 com câmera esbarra no P4R1 × NV12.
 - C03: S4 registra o motivo (S2 event ignored / no capture buffer / buffer clock not started / clip failed) — falta o log.
 - Próximo: commit quando o usuário pedir; rodar de novo na placa.
+
+### 2026-11-18 — por que o S2 não sobe no A5 (pergunta do usuário)
+- Conferido na develop do s2 (274ce5b, 18/11): ganhou Dockerfile (python:3.11-slim, entrypoint components.S2.main), mas segue lendo `--input` JSON e gravando `--output` JSON; requirements só shapely/pytest; README: "Integração com o barramento Kafka" pendente.
+- Novo achado: o S2 espera o I9 no formato da 6c (payload.detection_id + items[].compliance, ex.: gerar_teste_ppe.py), e o I9 real publica persons[].equipment[].state (CORRETO/INCORRETO). Mesmo com Kafka, os dois não se entendem: recado para VER-3 (I9) e VER-6 (S2).
+
+### 2026-11-23 — pedido: build dedicada ao I1 (sempre pronto na Jetson) + guia de teste
+- Pedido do usuário: ler o feito (sobretudo A8), preparar build especial só do I1, analisar as mudanças novas do repo, guia de teste. Será usada junto com uma futura build "todas as inferências do plano".
+- Máquina: "argenti" (computador do usuário, não a Jetson): só edição e validação local.
+- I1 develop andou: cb5c381 → 3b2a9cc (20/11, girafinos). Novo: I1/detector/orchestrator.py + I1/run_orchestrator.py (daemon FIFO que escuta ods.i1.command; START/STOP/HEARTBEAT; 1 modelo por vez no P2, release antes do load; TTL padrão 60 s sem heartbeat; force=true preempta), serviço i1-orchestrator no compose do I1 (ipc host, network host, /tmp:/tmp), tests/test_orchestrator.py. Dockerfile.jetson e pipeline/ingestão NÃO mudaram.
+- Perfis fixos no código: INV1/A4 app-sports-1.2.0 (1280, ball), VER1/A1 app-industry-1.0.0 (peca), VER3/A5 app-epi-1.0.0, VER5/A8 app-plates-1.0.0, VER6/A3 app-epi-1.0.0 (só pessoa). Vídeo por equipe em I1_VIDEOS_DIR (<SQUAD>.mp4 etc.) ou "source" explícito (caminho, video/imx519/imx477 = SHM do P4). source_id padrão = nome da equipe.
+- Atenção: broker padrão do orquestrador = 34.66.235.91:9093 (nuvem; doc diz "apps na nuvem, inferência na Jetson") — conflita com o Kafka da Jetson do CLAUDE.md: perguntar ao usuário. Consumer group com auto commit: comandos enviados com o I1 parado são reprocessados na volta.
+- Validado aqui: unittest tests.test_orchestrator 6/6 OK (venv no scratchpad); pyflakes só imports não usados.
+- Próximo: escrever builds/i1/ (compose name ods-i1, i1.env, i1.sh, limpar.sh, preparar-codigo.sh, engines de todos os pacotes) e o guia validacao/i1/GUIA-BUILD-I1.md; conferir ods.sh/lib.sh para a build do I1 não ser derrubada no "trocar".
+- Decisões de desenho (builds/i1, projeto ods-i1):
+  - Serviço i1 = run_orchestrator.py do 3b2a9cc, imagem ods-i1-gpu:<ref> (Dockerfile.jetson + l4t-tensorrt, igual A8/A5), restart unless-stopped, logs com rotação (10m x 3), broker da Jetson por ODS_KAFKA_BROKER (padrão do código é a nuvem).
+  - Vídeos: VIDEO_DIR montado em /videos (I1_VIDEOS_DIR=/videos): <SQUAD>.mp4 ou "source" explícito no comando.
+  - SHM do P4 de outra build: ipc host + pasta do host I1_P4_DIR (/var/lib/ods/p4-shm) montada em /tmp (a build de inferências faz o mesmo no P4). /tmp do host não serve: some no boot e o bind falharia.
+  - i1-engine (perfil engine) compila/confere TODOS os pacotes de I1_PACOTES; i1.sh roda depois do up (o daemon só carrega engine quando chega START).
+  - kafka-topicos cria ods.i1.command e ods.i1.detections.
+  - Teste: serviço aceite com a própria imagem do I1 (confluent-kafka + jsonschema + schema do I1, sem build extra) + ods_aceite.py; i1.sh entrega o log do i1 ao teste (passo "log") para conferir motivos de encerramento.
+  - lib.sh: imagens das builds permanentes (i1) protegidas no limpar --imagens das apps; ods.sh lista mostra o i1. apps() já ignora i1 no trocar.
+- 2026-11-23 escritos: builds/i1/{i1.env,docker-compose.yml,i1.sh,limpar.sh,preparar-codigo.sh,aceite/aceite_i1.py}; comum/lib.sh (ODS_PERMANENTES=(i1): imagens do i1 protegidas no limpar --imagens de outras builds); ods.sh (lista mostra i1; trocar não mexe). bash -n ok; pyflakes do aceite ok.
+- Próximo: validar compose (pyyaml + interpolação), simular o aceite contra orquestrador real em modo mock (venv) e Kafka falso; escrever validacao/i1/GUIA-BUILD-I1.md.
+- 2026-11-23 simulação (scratchpad/sim-i1/rodar.sh): orquestrador REAL do 3b2a9cc + p2 falso (engine_version <ref>-fp16) + Kafka falso em arquivo + aceite_i1.py + validador B4 bb2ea8c. Cenário ok: PASSOU 15, AVISO 2 (VER1/INV1 sem vídeo próprio), código 0. Cenário sem engine do sports: T1-INV1 e T40 FALHOU (esperado). Corrigido: T22b contava o JSON quebrado que o próprio teste manda; caminhos do teste configuráveis por env. awk do "ocupado" conferido no log real.
+- Próximo: validacao/i1/GUIA-BUILD-I1.md, README de validacao/i1, builds/README.md, CLAUDE.md (seções 5 e 8).
+- 2026-11-23 docker/git falsos (scratchpad/sim-sh, cópia de builds/): i1.sh subir (sem imagem: build i1 → prune → up → i1-engine → espera "Aguardando comandos"), testar (aceite, log entregue, limpeza de .passo/.i1-log), status, comando (run --rm --no-deps aceite com --send-command) ok; a8/limpar.sh --imagens mostra "mantida (o i1 usa)"; i1/limpar.sh --imagens remove a própria. Corrigido: comando cria resultados/ antes do run.
+- Escrito validacao/i1/GUIA-BUILD-I1.md (passos, itens esperados, resiliência R1–R3, contrato para outras builds, validação feita, pontos em aberto).
+
+### 2026-11-23 — respostas do usuário: nuvem, A8/A5 no I1 novo, vídeos em assets/, commit
+- Usuário: aplicações migraram para a nuvem; na Jetson rodam as inferências (I's). → broker do I1 = nuvem 34.66.235.91:9093 (padrão do orquestrador). Checagem do container "kafka" local deixa de valer para o I1 (lib: KAFKA_CONTAINER vazio pula).
+- A8 e A5: I1_REF → 3b2a9cc (não serão rodados agora). Foco: testar o I1.
+- Vídeos: assets/ na raiz do p3 (INV1.mp4, VER1.mp4, epi.mp4; 53 MB) → versionar e ./i1.sh videos copia para VIDEO_DIR com os nomes do orquestrador (VER3/VER6 → epi.mp4, VER5 → cam0.mp4 se existir).
+- Commit pedido (só I1 + A8/A5 + assets + docs; A2 continua fora). Usuário faz pull depois.
+- Feito (23/11): a8.env/a5.env I1_REF 3b2a9cc; lib.sh checar_kafka com KAFKA_CONTAINER (vazio = broker remoto; testado com docker falso nos 3 casos); i1.env KAFKA_BROKER nuvem, I1_VIDEOS (substitui I1_TESTE_VIDEOS); i1.sh videos (copia assets/ → VIDEO_DIR, links <SQUAD>.mp4; testado 2× numa cópia) e status com vídeos; guia e CLAUDE.md atualizados.
+- Vídeos (ffprobe): INV1 1920x1080 29,97 fps 963 quadros; VER1 3840x2160 29,97 fps 255 quadros; epi 1920x1080 24 fps 192 quadros; todos H.264.
+- Broker da nuvem: list_topics a partir do computador do usuário → Connection refused na 9093.
+- Commit (só I1, A8/A5 env, lib, ods.sh, assets, docs; A2 fora). Sem push.
