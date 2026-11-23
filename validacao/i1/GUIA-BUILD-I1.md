@@ -52,7 +52,17 @@ docker run --rm confluentinc/cp-kafka:latest kafka-broker-api-versions \
   --bootstrap-server 34.66.235.91:9093 2>/dev/null | grep -m1 'id:'   # deve terminar em "-> ("
 ```
 
-**Kafka da nuvem:** em 23/11/2026, a porta 9093 do broker **recusou a conexão** a partir do computador do usuário (fora do laboratório). Pode ter sido queda momentânea ou firewall liberando só a rede do laboratório. Se o comando acima não responder na Jetson, o `./i1.sh` para na conferência com essa mensagem. Se a turma voltar ao Kafka da placa, troque no `i1.env`: `KAFKA_BROKER=172.18.4.56:9093` e `KAFKA_CONTAINER=kafka`.
+**Kafka da nuvem:** em 23/11/2026, a porta 9093 do broker **recusou a conexão** a partir do computador do usuário (fora do laboratório). Pode ter sido queda momentânea ou firewall liberando só a rede do laboratório. Se o comando acima não responder na Jetson, o `./i1.sh` para na conferência com essa mensagem. Na Jetson ele também não respondeu (23/11/2026): o broker do GCP estava desligado.
+
+**Testar no Kafka da placa** (decisão do usuário, 23/11/2026, enquanto o da nuvem está fora): sem editar o `i1.env` versionado (isso travaria o `git pull`), use o `i1.local.env`, que fica fora do Git e vale no lugar do `i1.env`:
+
+```bash
+docker ps -a --filter name='^kafka$' --format '{{.Status}}'    # o Kafka da turma na placa precisa estar "Up"
+cd /opt/ods/p3/builds/i1
+cp i1.local.env.exemplo i1.local.env                           # KAFKA_BROKER=172.18.4.56:9093, KAFKA_CONTAINER=kafka
+```
+
+O `./i1.sh status` mostra de onde veio o broker. Para voltar à nuvem: `rm i1.local.env` e `./i1.sh` (o container é recriado com o broker novo). Com o Kafka da placa, troque `34.66.235.91:9093` por `172.18.4.56:9093` nos comandos manuais deste guia (consumidor da seção 4).
 
 **Imagem nova.** O `I1_REF` é o `3b2a9cc`, o mesmo agora fixado no A8 e no A5: a placa fica com uma imagem `ods-i1-gpu` só (~2,1 GB). Se a antiga `ods-i1-gpu:cb5c381` ainda estiver na placa e faltar disco, ela pode sair: `docker rmi ods-i1-gpu:cb5c381` (sem `-f`; não sai se algum container a usar).
 

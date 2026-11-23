@@ -5,3 +5,4 @@ __pycache__/
 builds/*/.estado-imagens
 validacao/*/resultados/
 builds/*/estado/
+builds/*/*.local.env

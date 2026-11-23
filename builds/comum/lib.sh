@@ -43,6 +43,14 @@ cd "$ODS_DIR_APP"
 set -a
 # shellcheck source=/dev/null
 source "./$APP.env"
+# Ajustes só desta placa, fora do Git (ex.: outro broker): <app>.local.env, lido depois do .env.
+# Editar o <app>.env versionado na placa travaria o próximo "git pull".
+ODS_LOCAL_ENV=()
+if [[ -f "$APP.local.env" ]]; then
+  # shellcheck source=/dev/null
+  source "./$APP.local.env"
+  ODS_LOCAL_ENV=(--env-file "$APP.local.env")
+fi
 set +a
 
 MIN_LIVRE_GB=${MIN_LIVRE_GB:-4}
@@ -75,7 +83,7 @@ else
   for _v in "${SEGREDOS[@]}"; do echo "$_v=nao-definido" >>"$ODS_SEGREDOS_ARQ"; done
 fi
 
-dc() { docker compose --env-file "$APP.env" --env-file "$ODS_SEGREDOS_ARQ" "$@"; }
+dc() { docker compose --env-file "$APP.env" --env-file "$ODS_SEGREDOS_ARQ" "${ODS_LOCAL_ENV[@]}" "$@"; }
 
 ajuda() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$ODS_SCRIPT"; }
 
@@ -147,7 +155,9 @@ checar_kafka() {
     erro "o Kafka da turma está de pé, mas não responde em $KAFKA_BROKER (listener mudou? veja docker inspect $conteiner)."
   else
     erro "o Kafka não responde em $KAFKA_BROKER (broker fora do ar, porta bloqueada ou endereço mudou?).
-  Teste à mão: docker run --rm $KAFKA_IMG kafka-broker-api-versions --bootstrap-server $KAFKA_BROKER"
+  Teste à mão: docker run --rm $KAFKA_IMG kafka-broker-api-versions --bootstrap-server $KAFKA_BROKER$(
+    [[ -f "$APP.local.env.exemplo" && ! -f "$APP.local.env" ]] &&
+      printf '\n  Para usar outro broker só nesta placa: cp %s.local.env.exemplo %s.local.env' "$APP" "$APP")"
   fi
 }
 

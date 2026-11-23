@@ -4,8 +4,8 @@
 - Aplicação em foco: build dedicada do I1 (builds/i1), serviço permanente; foco do usuário é testar o I1
 - Fase: escrita, simulada fora da placa e commitada (23/11); NÃO rodada na Jetson
 - Último resultado: broker do I1 = nuvem 34.66.235.91:9093 (KAFKA_CONTAINER vazio); vídeos em assets/ + ./i1.sh videos; A8 e A5 com I1_REF=3b2a9cc (não testados)
-- Próximo passo: usuário dá push/pull na Jetson: cd /opt/ods/p3/builds/i1 && ./i1.sh && ./i1.sh status && pedido manual && ./i1.sh testar (guia validacao/i1/GUIA-BUILD-I1.md, seções 2–6)
-- Bloqueios / perguntas abertas ao usuário: broker da nuvem recusou conexão na 9093 a partir do computador do usuário (conferir da placa); A2 segue sem commit; C03 do A5
+- Próximo passo: usuário dá git push (2 commits) e, na Jetson: git pull; cd builds/i1; cp i1.local.env.exemplo i1.local.env (Kafka da placa); ./i1.sh; ./i1.sh status; pedido manual (consumidor em 172.18.4.56:9093); ./i1.sh testar
+- Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (GCP, TRA-1) desligado em 23/11 — teste vai no Kafka da placa; A2 segue sem commit; C03 do A5
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -362,3 +362,13 @@
 - Vídeos (ffprobe): INV1 1920x1080 29,97 fps 963 quadros; VER1 3840x2160 29,97 fps 255 quadros; epi 1920x1080 24 fps 192 quadros; todos H.264.
 - Broker da nuvem: list_topics a partir do computador do usuário → Connection refused na 9093.
 - Commit (só I1, A8/A5 env, lib, ods.sh, assets, docs; A2 fora). Sem push.
+
+### 2026-11-23 — Kafka da nuvem não responde (Jetson e computador do usuário)
+- Jetson: kafka-broker-api-versions em 34.66.235.91:9093 sem saída. Daqui: 9092/9093/9094/29092/19092 recusadas (RST: a máquina responde, nada escutando).
+- Repos da turma (s4 DEMO/PLANO, a7, i4, a2) confirmam 34.66.235.91:9093 como broker da TRA-1 no GCP; i4/z_script.sh: "não deixe nada rodando: gasta crédito do GCP" → broker provavelmente só ligado sob demanda.
+- Próximo: usuário pede à TRA-1 para ligar o broker (ou decide testar o I1 no Kafka da placa, trocando KAFKA_BROKER/KAFKA_CONTAINER).
+- Notebook do usuário: /dev/tcp 34.66.235.91:9093 → Connection refused (confirma). Usuário: esse Kafka não está na Jetson (é o do GCP/TRA-1).
+
+### 2026-11-23 — decisão: testar o I1 no Kafka da placa
+- Usuário: seguir com o teste no Kafka local. Feito: suporte genérico a <app>.local.env (fora do Git) na lib (source depois do <app>.env e --env-file por último no dc) + builds/i1/i1.local.env.exemplo (172.18.4.56:9093, KAFKA_CONTAINER=kafka).
+- Testado com docker falso: sem local.env → erro com dica do i1.local.env; com local.env → checa container kafka e compose recebe --env-file i1.local.env por último.

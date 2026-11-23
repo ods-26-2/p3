@@ -156,7 +156,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - Engines de `I1_PACOTES` (plates, epi, industry, sports) em `/var/lib/ods/engines`; vídeos em `VIDEO_DIR` (`<SQUAD>.mp4`); sockets do P4 de outra build via `ipc: host` + `I1_P4_DIR` (`/var/lib/ods/p4-shm`) em `/tmp`.
 - `./ods.sh trocar` não a remove; `comum/lib.sh` (`ODS_PERMANENTES`) protege a imagem dela no `limpar.sh --imagens` das apps. A futura build de "todas as inferências" pede ao I1 por comando, sem `i1` próprio.
 - Guia e resultado esperado: `validacao/i1/GUIA-BUILD-I1.md`; teste `./i1.sh testar` (T01–T42).
-- Broker: o da nuvem (`KAFKA_BROKER`; `KAFKA_CONTAINER=` vazio faz a `checar_kafka` da lib não procurar o container `kafka` local).
+- Broker: o da nuvem (`KAFKA_BROKER`; `KAFKA_CONTAINER=` vazio faz a `checar_kafka` da lib não procurar o container `kafka` local). Em 23/11 o da nuvem estava desligado (porta recusada da Jetson e do notebook): o teste vai no Kafka da placa via `builds/i1/i1.local.env` (cópia do `.exemplo`; a lib lê `<app>.local.env`, fora do Git, depois do `<app>.env`).
 - Vídeos das equipes versionados em `assets/` (`VER1.mp4` 4K, `INV1.mp4`, `epi.mp4`); `./i1.sh videos` (também no `subir`) copia para `VIDEO_DIR` e cria os links `<SQUAD>.mp4` de `I1_VIDEOS`. O `cam0.mp4` (VER5) já está na placa.
 - A8 e A5 passaram para o I1 `3b2a9cc` (23/11, só `I1_REF`; não testados com ele).
 

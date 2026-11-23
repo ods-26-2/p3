@@ -223,7 +223,7 @@ status() {
   echo
   df -h /
   echo
-  echo "Kafka: $KAFKA_BROKER (confira com ./i1.sh subir ou kafka-broker-api-versions)"
+  echo "Kafka: $KAFKA_BROKER ($([[ -f i1.local.env ]] && echo 'do i1.local.env' || echo 'do i1.env'))"
   local rel; rel=$(ls -t resultados/aceite-i1-*.txt 2>/dev/null | head -1 || true)
   [[ -n "$rel" ]] && { echo; echo "Último teste ($rel):"; grep '^Resumo' "$rel"; }
   return 0
