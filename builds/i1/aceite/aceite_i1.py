@@ -47,6 +47,9 @@ TOPICO_CMD = os.environ.get("I1_COMMAND_TOPIC", "ods.i1.command")
 TOPICO_DET = "ods.i1.detections"
 PACOTES = os.environ.get("I1_PACOTES", "").split()
 QUADROS = int(os.environ.get("I1_TESTE_QUADROS", "30"))
+# Exceções por equipe ("INV1=150"): no INV1.mp4 a bola só aparece por volta do quadro 120.
+QUADROS_EQUIPE = {k: int(v) for k, v in (par.split("=", 1) for par in
+                  os.environ.get("I1_TESTE_QUADROS_EQUIPE", "").split() if "=" in par)}
 VIDEOS_DIR = os.environ.get("I1_TESTE_VIDEOS_DIR", "/videos")
 ARTEFATOS = os.environ.get("I1_ARTEFATOS", "/app/I1/artifacts")
 SCHEMA_I1 = os.environ.get("I1_SCHEMA", "/app/schemas/ods.i1.detections.v1.0.schema.json")
@@ -166,7 +169,7 @@ def main() -> int:
             teste.registrar(f"T1-{squad}", f"Carga do {perfil.engine_ref} ({squad}/{perfil.app_id})", BLOQUEADO,
                             f"sem vídeo em {VIDEOS_DIR} (I1_TESTE_VIDEOS)")
             continue
-        pedido = start(bus, squad, fonte, f"carga-{squad.lower()}", max_frames=QUADROS, ttl_seconds=300)
+        pedido = start(bus, squad, fonte, f"carga-{squad.lower()}", max_frames=QUADROS_EQUIPE.get(squad, QUADROS), ttl_seconds=300)
         lote.append((squad, pedido, proprio, perfil))
         esperados.append((squad, f"carga-{squad.lower()}", {"max_frames_reached", "source_completed"}))
 

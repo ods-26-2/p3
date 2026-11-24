@@ -2,7 +2,7 @@
 
 Build em [`builds/i1/`](../../builds/i1/). Deixa o I1 **sempre de pé** na Jetson, atendendo pedidos de detecção pelo Kafka. As builds das aplicações e a futura build de "todas as inferências" usam este I1 em vez de subir um próprio.
 
-**Estado (23/11/2026):** escrita e simulada fora da placa. **Ainda não rodou na Jetson.** O que foi validado e onde está na seção 9.
+**Estado (24/11/2026):** rodou na Jetson com o Kafka da placa: `./i1.sh testar` com PASSOU 16, FALHOU 0, AVISO 1 (T1-INV1, bola fora de cena nos 30 primeiros quadros; corrigido no teste). O que foi validado e onde está na seção 9.
 
 **Arranjo da turma (23/11/2026):** as aplicações rodam na nuvem; a Jetson roda as inferências. O I1 usa o **Kafka da nuvem** (`34.66.235.91:9093`, `KAFKA_BROKER` no `i1.env`), não o container `kafka` da placa.
 
@@ -201,7 +201,7 @@ Cada pedido do teste usa um `source_id` `p3-teste-*` e um `session_id` próprio.
 | T01 | `ods.i1.command` e `ods.i1.detections` existem | PASSOU |
 | T1-VER5 | `app-plates` carrega e roda: `artifact_version …-fp16`, classes do pacote, schema do I1, `sequence` sem lacunas | PASSOU |
 | T1-VER3 / T1-VER6 | `app-epi` (VER6 só com `pessoa`) sobre o `epi.mp4` | PASSOU |
-| T1-VER1 / T1-INV1 | `app-industry` sobre o `VER1.mp4`, `app-sports` sobre o `INV1.mp4` | PASSOU. AVISO se nenhum objeto aparecer nos 30 primeiros quadros (ex.: bola fora de cena no início) |
+| T1-VER1 / T1-INV1 | `app-industry` sobre o `VER1.mp4`, `app-sports` sobre o `INV1.mp4` (150 quadros: a bola só entra em cena por volta do quadro 120; `I1_TESTE_QUADROS_EQUIPE`) | PASSOU. AVISO se nenhum objeto aparecer nos quadros pedidos |
 | T20 | Fila FIFO: as 5 equipes atendidas na ordem, sem sobreposição | PASSOU |
 | T21 | Tempo de troca de modelo (fim de uma equipe → 1ª detecção da seguinte) | PASSOU até 15 s; acima, AVISO. **Anote os valores** |
 | T22 | Envelope 1.0 pelo validador do B4 | PASSOU (o I1 já valida contra o próprio schema antes de publicar) |
@@ -310,6 +310,15 @@ O `./ods.sh trocar <app>`:
 
 ## 9. O que foi validado e onde
 
+**Na Jetson (23–24/11/2026), Kafka da placa (`i1.local.env`):**
+- `./i1.sh`: imagem `ods-i1-gpu:3b2a9cc` já existente; engines FP16 dos 4 pacotes (industry e sports compiladas na hora; no sports o TensorRT pulou 3 táticas por falta de memória, a engine carrega e detecta);
+- `./i1.sh testar` (24/11, 01:15): **PASSOU 16, FALHOU 0, AVISO 1**. Evidência: [`evidencias/aceite-i1-20261124-011649.txt`](evidencias/aceite-i1-20261124-011649.txt). Números:
+  - troca de modelo de 0,2 a 0,8 s (T21); o tempo do START à 1ª mensagem (5,2 → 12,1 s) cresce porque os 5 pedidos entram juntos na fila;
+  - ~25 quadros/s publicados no `cam0.mp4` (T32: 100 em 4 s; T33: 270 em 10,5 s, vídeo inteiro);
+  - 150 mensagens válidas no validador do B4; nenhum reinício; nenhum `OUT_OF_MEMORY`;
+  - AVISO do T1-INV1: nenhuma bola nos 30 primeiros quadros do `INV1.mp4`. O ONNX original na CPU confirma (maior confiança 0,063 nesses quadros; a bola aparece por volta do quadro 120). O teste agora pede 150 quadros ao INV1 (**ainda não rodado assim**).
+
+
 **Fora da Jetson (23/11/2026, computador do usuário):**
 - `bash -n` em `i1.sh`, `limpar.sh`, `preparar-codigo.sh`, `comum/lib.sh` e `ods.sh`;
 - YAML do compose e todas as variáveis definidas no `i1.env` (com `pyyaml`). **Sem `docker compose config`**: o plugin não está instalado aqui;
@@ -324,10 +333,10 @@ O `./ods.sh trocar <app>`:
 - broker da nuvem a partir do computador do usuário: **conexão recusada** na 9093 (seção 2).
 
 **Não validado:**
-- build da imagem e GPU de verdade;
-- tempo de carga e de troca de cada engine (o falso usa 1 s);
-- memória;
-- compilação do `app-industry` e do `app-sports`;
+- build da imagem do zero nesta build (a imagem do `3b2a9cc` já existia na placa);
+- teste com o Kafka da nuvem (fora do ar em 23/11);
+- T1-INV1 com 150 quadros;
+- `testar-i1-servico.sh` (seção 4b) e a resiliência (seção 6);
 - `ipc: host` com um P4 de outra build;
 - reinício da placa;
 - `shellcheck`.

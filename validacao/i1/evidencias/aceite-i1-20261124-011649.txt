@@ -1,0 +1,45 @@
+Teste de aceitação do I1 — 2026-11-24T01:15:48.605Z
+Build dedicada do I1: orquestrador FIFO (ods.i1.command) na GPU
+(Jetson ods-pc, I1 3b2a9cc, Kafka da placa 172.18.4.56:9093 via i1.local.env; I1_TESTE_QUADROS=30)
+
+T01   PASSOU     Tópicos do I1 no broker
+                  ods.i1.command, ods.i1.detections
+T1-VER5  PASSOU     Carga do app-plates-1.0.0 (VER5/A8) na GPU
+                  30 mensagens, artifact_version ['app-plates-1.0.0-fp16'], classes {'placa_1L_BR': 30}, 1ª mensagem 5.2 s após o START
+T1-VER3  PASSOU     Carga do app-epi-1.0.0 (VER3/A5) na GPU
+                  30 mensagens, artifact_version ['app-epi-1.0.0-fp16'], classes {'colete': 30, 'capacete': 32, 'pessoa': 30}, 1ª mensagem 6.6 s após o START
+T1-VER6  PASSOU     Carga do app-epi-1.0.0 (VER6/A3) na GPU
+                  30 mensagens, artifact_version ['app-epi-1.0.0-fp16'], classes {'pessoa': 30}, 1ª mensagem 8.0 s após o START
+T1-VER1  PASSOU     Carga do app-industry-1.0.0 (VER1/A1) na GPU
+                  30 mensagens, artifact_version ['app-industry-1.0.0-fp16'], classes {'peca': 30}, 1ª mensagem 10.0 s após o START
+T1-INV1  AVISO      Carga do app-sports-1.2.0 (INV1/A4) na GPU
+                  30 mensagens, artifact_version ['app-sports-1.2.0-fp16'], classes {}, 1ª mensagem 12.1 s após o START — nenhum objeto nos 30 quadros
+T20   PASSOU     Fila FIFO: uma equipe por vez, na ordem dos pedidos
+                  VER5 → VER3 → VER6 → VER1 → INV1
+T21   PASSOU     Tempo de troca de modelo (libera um, carrega outro)
+                  VER5→VER3 0.6 s, VER3→VER6 0.2 s, VER6→VER1 0.8 s, VER1→INV1 0.5 s
+T22   PASSOU     Envelope 1.0 das mensagens recebidas (validador do B4)
+                  150 mensagem(ns) em 1 schema(s)
+T31   PASSOU     STOP interrompe a equipe ativa
+                  6 mensagens; 0 chegaram mais de 2 s depois do STOP
+T32   PASSOU     Sem HEARTBEAT, o pedido expira no TTL
+                  TTL 4 s; última mensagem 4.0 s após o START (100 mensagens)
+T33   PASSOU     Com HEARTBEAT, o pedido vai até o fim do vídeo
+                  270 mensagens em 10.5 s (TTL 4 s renovado)
+T02   PASSOU     Comandos inválidos ignorados sem derrubar o serviço
+                  2 'Comando ignorado' no log (esperado 2)
+T30   PASSOU     Vídeo inexistente vira erro registrado e o I1 segue atendendo
+                  pedido VER1 encerrado com 'error'
+T40   PASSOU     Motivos de encerramento no log batem com os pedidos
+                  VER5:max_frames_reached, VER3:max_frames_reached, VER6:max_frames_reached, VER1:max_frames_reached, INV1:max_frames_reached, VER1:error, VER5:stopped_by_command, VER6:ttl_expired, VER3:source_completed
+T41   PASSOU     O serviço i1 não reiniciou durante o teste
+                  RestartCount 0 → 0
+T42   PASSOU     Sem falta de memória da GPU no log
+                  nenhuma
+
+Resumo: PASSOU 16  FALHOU 0  BLOQUEADO 0  AVISO 1
+
+Nota do P3 (24/11/2026): o AVISO do T1-INV1 é do vídeo, não da engine. O ONNX original do
+app-sports 1.2.0, na CPU (fora da placa), também não vê bola nos quadros 0–29 do INV1.mp4 (maior
+confiança 0,063); a bola aparece a partir do quadro ~120 (12 de 32 amostras, uma a cada 30 quadros,
+com confiança >= 0,5). Desde então o teste pede 150 quadros ao INV1 (I1_TESTE_QUADROS_EQUIPE).

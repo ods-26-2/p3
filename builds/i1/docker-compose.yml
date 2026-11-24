@@ -121,6 +121,7 @@ services:
       I1_PACOTES: ${I1_PACOTES}
       I1_TESTE_VIDEOS: ${I1_VIDEOS:-}
       I1_TESTE_QUADROS: ${I1_TESTE_QUADROS:-30}
+      I1_TESTE_QUADROS_EQUIPE: ${I1_TESTE_QUADROS_EQUIPE:-}
       I1_REF: ${I1_REF}
       RESULT_DIR: /resultados
       B4_DIR: /b4
