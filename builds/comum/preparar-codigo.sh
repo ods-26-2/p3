@@ -15,6 +15,10 @@ ENV_ARQ=${1:?uso: preparar-codigo.sh <arquivo .env>}
 set -a
 # shellcheck source=/dev/null
 source "$ENV_ARQ"
+# Ajustes só desta placa (<app>.local.env, fora do Git), como na lib: valem no lugar do .env.
+LOCAL_ARQ="${ENV_ARQ%.env}.local.env"
+# shellcheck source=/dev/null
+[[ -f "$LOCAL_ARQ" ]] && source "$LOCAL_ARQ"
 set +a
 : "${SRC_DIR:?defina SRC_DIR em $ENV_ARQ}"
 

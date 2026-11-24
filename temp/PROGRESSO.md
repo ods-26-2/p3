@@ -1,12 +1,12 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: build dedicada do I1 (builds/i1), serviço permanente; foco do usuário é testar o I1
-- Fase: escrita, simulada fora da placa e commitada (23/11); NÃO rodada na Jetson
-- Último resultado: broker do I1 = nuvem 34.66.235.91:9093 (KAFKA_CONTAINER vazio); vídeos em assets/ + ./i1.sh videos; A8 e A5 com I1_REF=3b2a9cc (não testados)
-- Próximo passo: usuário dá git push (2 commits) e, na Jetson: git pull; cd builds/i1; cp i1.local.env.exemplo i1.local.env (Kafka da placa); ./i1.sh; ./i1.sh status; pedido manual (consumidor em 172.18.4.56:9093); ./i1.sh testar
-- Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (GCP, TRA-1) desligado em 23/11 — teste vai no Kafka da placa; A2 segue sem commit; C03 do A5
-- Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026) para continuar em outro computador; temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
+- Aplicação em foco: build "inf" (todas as inferências I1–I9; uma pasta, uma seção do compose por I; I1 = builds/i1)
+- Fase: compose + scripts prontos; validado só fora da placa (config real, shellcheck, docker simulado)
+- Último resultado: builds/inf completa; simulação de subir/testar/limpar passou nos caminhos de sucesso e falha
+- Próximo passo: usuário decide o commit; na Jetson: builds/i1/i1.sh status → cd builds/inf → ./inf.sh → ./inf.sh testar
+- Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (TRA-1) desligado; imagens ods-i5* d7b1379 de quem?; dica "../ods.sh trocar" da lib para build permanente; A2 segue sem commit
+- Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
 ### 2026-11-13 — início
@@ -391,3 +391,45 @@
 ### 2026-11-23 — pergunta: ./i1.sh testar roda os testes do repo do I1? Não.
 - testar-i1-servico.sh passa a aceitar --build i1|a8 (padrão i1): lê i1.env (+ i1.local.env), sem segredos/perfil; o bind de I1_P4_DIR em /tmp fica fora do teste. S03 continua em stdout (run_detector só lê o broker do ambiente).
 - Suíte do 3b2a9cc fora da placa (venv): 46 testes, só test_05 com erro (ultralytics) → S02 deve passar com 45/46.
+
+### 2026-11-24 — Jetson: ./i1.sh testar PASSOU 16, FALHOU 0, AVISO 1
+- Kafka da placa (i1.local.env). Troca de modelo 0,2–0,8 s; START→1ª msg 5,2–12,1 s (fila de 5); ~25 q/s no cam0; T33 = vídeo cam0 inteiro (270 quadros; T31–T33 usam o vídeo do VER5); B4 150 válidas; RestartCount 0→0; sem OOM.
+- AVISO T1-INV1 (app-sports, classe única "ball"): ONNX original na CPU (scratchpad/tools/bola.py) também não vê bola nos quadros 0–29 do INV1.mp4 (máx. 0,063); aparece a partir do ~120 (12/32 amostras >= 0,5). Conclusão: vídeo, não a engine com táticas puladas.
+- Arquivos: aceite_i1.py (I1_TESTE_QUADROS_EQUIPE), docker-compose.yml (repassa), i1.env (INV1=150), evidencias/aceite-i1-20261124-011649.txt, GUIA (estado, tabela, seção 9), CLAUDE.md seção 5. Validado: py_compile, YAML, source do .env. Sem commit.
+
+### 2026-11-24 10:19 — Jetson: R1 (kill -9 no processo do I1)
+- RestartCount 0 → 1, running, "Aguardando comandos" de novo (broker 172.18.4.56:9093).
+- Pedido VER5 teste-r1 entregue, mas sem "Carregando app-plates"/"VER5 encerrada" nos 20 s seguintes. Hipótese: após kill -9 o membro morto segura a partição do grupo até o session.timeout do librdkafka (45 s); o pedido deve ter sido atendido depois. Pedido ao usuário: docker logs --since 5m | grep VER5.
+- Linhas VER3 p3-teste-heartbeat de 10:19:33 no log: provavelmente o ./i1.sh testar rodado de novo de manhã (confirmar com ls resultados/); se não foi, é replay de comando antigo.
+- Pergunta do usuário: URL/porta do I1? Resposta: não tem; só Kafka (ods.i1.command / ods.i1.detections).
+
+### 2026-11-24 — pedido: builds das inferências e build única "inf"
+- Usuário: analisar o código dos repositórios I e montar os builds deles, com alvo final um único build "inf" que sobe todas as inferências.
+- Decisão anterior (CLAUDE.md): a build de todas as inferências NÃO tem i1 próprio; pede ao orquestrador de builds/i1 por ods.i1.command.
+- Ambiente local: docker sem compose plugin e sem acesso ao socket; sem shellcheck/pyflakes. Validação local fica em bash -n + checagem Python.
+- Próximo: levantamento i2..i9 (Dockerfile, entrada, tópicos, broker, dados de entrada, GPU).
+
+### 2026-11-24 — levantamento dos repositórios I (clones em scratchpad/src)
+- I1 develop 3b2a9cc (= builds/i1): orquestrador lê arquivo (VIDEO_DIR/<SQUAD>.mp4) ou socket do P4 (/tmp/p4_*_shm). A inf NÃO tem i1: pede por ods.i1.command.
+- I2 main 5283d60 (sem mudança): Dockerfile; --i1/--kafka/--fps; contínuo.
+- I3 main c3d876e (novo; builds usam ac28d37): --kafka agora EXIGE --registro (6c ciclo de vida); calibração sem clique pela quadra do A4 (dados/quadra_mediana.png + padroes/quadra-volei-fivb.json) → one-shot autocontido.
+- I4 main 503f64b (novo; A6 usa 61b39a1): compose próprio com server C++ (dockerfile.server, websocket 18080, grava /dev/shm/frames_cam) + i4 ao vivo (dockerfile.python, REQS=requirements-i4.txt, mediapipe+torch CPU, ipc service:server) + s6. webcam.py só aceita índice de câmera → P3 precisa de um enviador de vídeo (teste.mp4 do repo) por websocket.
+- I5 main d7b1379 (novo; A7 usa cdb00d2): agora tem Dockerfile/Dockerfile.jetson (Jetson usa l4t-pytorch r35 = JetPack 5, incompatível com JP 6.2.1). Modo produção: --kafka consome ods.p5.audio_chunk (broker só pelo YAML) + mock_p5_producer.py (arquivo → audio_chunk). Sem --wake-word = modo contínuo.
+- I6 main 86ae5d7 (= A2): modo teste lê arquivo em laço; nenhum vídeo com QR em lugar nenhum → P3 gera um com cv2.QRCodeEncoder (opencv-contrib da própria imagem).
+- I7 main 1441bbb (novo; A8 usa a4da4b0): Dockerfile com P2 CPU (p2-build no build, DETECTOR=p2), --video nativo (substitui o extrair_quadros do P3), --p4 video|imx519.
+- I8 main 051851f (= A1): sem modelo; publisher dos mocks 2.0 com taxonomia do A1 (precisa do clone do a1).
+- I9 main 8ae3933 (= A5): sem Dockerfile (P3 inline); catálogo opcional (política padrão).
+- Desenho: builds/inf (projeto ods-inf), um compose com seção por I, scripts de apoio em inf/<iX>/; contínuos: i2, i4-server, i4, i5, i6, i9; sob demanda: i3, i4-video, i5-audio, i7, i8; I1 externo (builds/i1).
+
+### 2026-11-24 — build inf: arquivos (1ª parte)
+- Criados: builds/inf/inf.env, docker-compose.yml (kafka-topicos, i2, i3, i4-server, i4, i4-video, i5, i5-audio, i6, i6-gerar-video, i7, i8, i9), i4/enviar_video.py, i6/gerar_video_qr.py, i5/pipeline_config.yaml (broker __KAFKA_BROKER__ trocado na partida).
+- Movido: builds/a1/i8 → builds/comum/i8 (git mv); a1/docker-compose.yml monta ../comum/i8.
+- Imagem do I5 com nome ods-i5-cpu:<ref> para não colidir com ods-i5:d7b1379 que já existe na placa (origem desconhecida).
+- Próximo: inf.sh, limpar.sh, preparar-codigo.sh, inf.local.env.exemplo, ods.sh (inf trocável), testar.
+
+### 2026-11-24 — build inf completa (validada só fora da Jetson)
+- Arquivos: builds/inf/{inf.sh, limpar.sh, preparar-codigo.sh, inf.local.env.exemplo}; ods.sh (apps() inclui inf; cabeçalho); builds/README.md (seção inf); validacao/inf/GUIA-BUILD-INF.md; CLAUDE.md (seção 5 e pendências INV-2/VER-4); comum/preparar-codigo.sh passa a ler o <app>.local.env (antes ignorava um SRC_DIR local).
+- Validação local: docker compose v2.32.4 e shellcheck 0.10 baixados em scratchpad/bin. config --quiet OK com clones reais; caminhos de COPY/volumes conferidos nos commits; shellcheck só SC2034 (variáveis da lib); py_compile dos scripts do P3.
+- Simulação (docker falso em scratchpad/sim): subir (etapas de build na ordem; gera vídeo de QR), testar sucesso (PASSOU 10) e falha (I7 código 3, I5 sem transcrição → FALHOU 2, rc 1), broker diferente do I1 → recusa, i1 com quadros inválidos → erro, contar, status, limpar --imagens, ods.sh lista (inf aparece).
+- Sem commit.
+- Próximo: usuário decide o commit; na Jetson: git pull; builds/i1/i1.sh status; cd builds/inf; (cp inf.local.env.exemplo inf.local.env se o I1 estiver no Kafka da placa); ./inf.sh; ./inf.sh testar.

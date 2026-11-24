@@ -30,7 +30,7 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 | App | Sobe por padrão | Sob demanda | Portas | Fora (motivo) |
 |---|---|---|---|---|
 | A1 | a1-db, a1-backend, a1-frontend, s4 | `./a1.sh i8` (eventos de exemplo do I8) · perfil `cadeia`: s5 | 5500 | P4/I1 (I8 não consome), P7 (sem Kafka) |
-| A2 | a2, a2-cracha, i6, s4 | — | 8000, 8001, 8082 | P4 (I6 não lê o P4) |
+| A2 | a2, a2-cracha (web-app com Dockerfile do VER-2), i6, s4 | — | 8000, 8001, 8082 | P4 (I6 não lê o P4) |
 | A3 | a3, s3, i2, s1 | `./a3.sh video` (p4+i1) · `./a3.sh cadeia` (s4, s5) | 8501 | S2 (sem Kafka) |
 | A4 | a4-back, a4-front, i2, s1, s4 | `./a4.sh calibrar` (i3) · `./a4.sh video` (p4+i1 com modelo app-volei) · `cadeia`: s5 | 3000, 8000, 18084 | P7 (sem Kafka) |
 | A5 | a5-backend, a5-frontend, s3, s4 | `./a5.sh cadeia` (i9, i2, s1) · `./a5.sh video` (p4 + i1 na GPU com o modelo de EPI `app-epi`; vídeo `VIDEO_ARQUIVO`) | 8095 | S2 (sem Kafka) |
@@ -43,6 +43,15 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 | Build | Sobe | Uso | Guia |
 |---|---|---|---|
 | `i1/` | `kafka-topicos`, `i1` (orquestrador do I1 `3b2a9cc`, GPU, `restart: unless-stopped`) · `./i1.sh engines` (engines de `I1_PACOTES`) | Fica de pé enquanto as aplicações trocam. Pedidos em `ods.i1.command` (`START`/`HEARTBEAT`/`STOP` por equipe), detecções em `ods.i1.detections`. O `./ods.sh trocar` não a remove, e o `limpar.sh --imagens` das apps mantém a imagem dela | [`validacao/i1/GUIA-BUILD-I1.md`](../validacao/i1/GUIA-BUILD-I1.md) |
+
+## Build de todas as inferências
+
+| Build | Sobe por padrão | Sob demanda | Portas | Guia |
+|---|---|---|---|---|
+| `inf/` | `i2`, `i4-server` + `i4` (Libras ao vivo), `i5` (fala, consome `ods.p5.audio_chunk`), `i6` (QR, vídeo em laço), `i9` | `./inf.sh i1 [EQUIPE]` (pedido ao I1 de `i1/`) · `i3` (calibração da quadra do A4) · `i4` (vídeo como webcam) · `i5` (áudio como P5) · `i7` (placas em vídeo) · `i8` (eventos de exemplo) · `./inf.sh testar` dispara todas e confere cada tópico | 18080 (servidor do I4, só `127.0.0.1` por padrão) | [`validacao/inf/GUIA-BUILD-INF.md`](../validacao/inf/GUIA-BUILD-INF.md) |
+
+Sem `i1` próprio: o I1 é o de `i1/` (tem de estar de pé e no mesmo Kafka; o `inf.sh` confere). Entra no
+`./ods.sh trocar inf` como as aplicações. Tudo em CPU, salvo o I1.
 
 ## Estrutura comum
 

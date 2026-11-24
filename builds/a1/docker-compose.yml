@@ -111,7 +111,7 @@ services:
       I8_TAXONOMIA_VERSAO: defects-a1-1.0.0
     command: ["python", "/p3/i8/publicar_exemplos.py"]
     volumes:
-      - ./i8:/p3/i8:ro
+      - ../comum/i8:/p3/i8:ro
       - ${SRC_DIR}/a1/shared/artifacts/defect-taxonomy:/taxonomias:ro
 
   s4:

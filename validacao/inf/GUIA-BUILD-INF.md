@@ -1,0 +1,104 @@
+# Build "inf": todas as inferências na Jetson
+
+Guia de execução e de teste da build `builds/inf` (P3 · SIS-1). Montada em 24/11/2026.
+
+**Estado:** validada só fora da placa (`docker compose config` com os clones reais, `bash -n`,
+`shellcheck` e os scripts contra um `docker` simulado, nos caminhos de sucesso e de falha).
+**Nenhuma imagem desta build foi construída na Jetson ainda**, exceto as que ela divide com as
+aplicações (`ods-i2`, `ods-i6`, `ods-i9`, se o A8, o A2 e o A5 já as construíram).
+
+## 1. O que sobe
+
+| Inferência | Serviço | Como roda | Entrada | Saída (tópico) |
+|---|---|---|---|---|
+| I1 detecção | — (build `i1/`) | permanente, GPU | `./inf.sh i1 [EQUIPE] [QUADROS]` → `ods.i1.command` | `ods.i1.detections` |
+| I2 rastreio | `i2` | contínuo | `ods.i1.detections` | `ods.i2.tracks` |
+| I3 calibração | `i3` | `./inf.sh i3` | imagem da quadra do A4 (repo do I3) | `ods.i3.calibration`, `ods.artifact.published` |
+| I4 Libras | `i4-server` + `i4` | contínuo | `./inf.sh i4` (vídeo `teste.mp4` do I4) ou o `webcam.py` do I4 | `ods.i4.sign`, `ods.i4.keypoints`, `ods.i4.facial_marker` |
+| I5 fala | `i5` | contínuo | `./inf.sh i5` (áudio como se fosse o P5, em `ods.p5.audio_chunk`) | `ods.i5.transcript` |
+| I6 QR | `i6` | contínuo | `VIDEO_DIR/inf-qr.mp4` em laço (gerado pelo P3) | `ods.i6.code_read` |
+| I7 placas | `i7` | `./inf.sh i7` | `VIDEO_DIR/cam0.mp4` (20 quadros amostrados) | `ods.i7.plate_read` |
+| I8 peças | `i8` | `./inf.sh i8` | 4 eventos de exemplo do próprio I8 (sem modelo no repo) | `ods.industria.defeito_classificado` |
+| I9 EPI | `i9` | contínuo | `ods.i1.detections` (I1 com a equipe VER3/VER6) | `ods.i9.ppe_compliance` |
+
+Commits no `builds/inf/inf.env`. Diferenças em relação às builds das aplicações:
+
+- **I3 `c3d876e`** (o A8/A4 usam `ac28d37`): publicar exige `--registro`; o registro fica no volume `i3-registro`.
+- **I4 `503f64b`** (o A6 usa `61b39a1`): agora há o servidor C++ e o reconhecimento ao vivo em container.
+- **I5 `d7b1379`** (o A7 usa `cdb00d2`): imagem do P3 em CPU, `ods-i5-cpu`. O `Dockerfile.jetson` da
+  equipe usa `l4t-pytorch:r35.2.1` (JetPack 5), que não roda no JetPack 6.2.1 da placa.
+- **I7 `1441bbb`** (o A8 usa `a4da4b0`): lê vídeo (`--video`) e o P4 (`--p4`) sozinho; detector pelo P2 em CPU.
+
+## 2. Antes de subir
+
+```bash
+cd /opt/ods/p3 && git pull
+df -h /                                   # a build constrói ~7 imagens novas: estimativa de 8 a 10 GB
+builds/i1/i1.sh status                    # o I1 precisa estar de pé (em builds/i1)
+```
+
+- **Disco:** as imagens com PyTorch (I4, I5, I7) são grandes. O `inf.sh` constrói uma por vez, roda
+  `docker builder prune -af` depois de cada uma e para abaixo de 4 GB livres. Se não couber, libere
+  a build de uma aplicação: `../ods.sh trocar inf` remove as outras e sobe esta.
+- **Mesmo Kafka do I1:** o `inf.sh` lê o broker do container do I1 e recusa subir com outro. Com o
+  I1 no Kafka da placa (`i1.local.env`): `cp inf.local.env.exemplo inf.local.env`.
+- **Memória:** o I4 (MediaPipe + PyTorch), o I5 (Whisper small em float32) e o I7 (quando roda)
+  ficam na mesma RAM que o TensorRT do I1. O teste marca `T-I1M` se o I1 reiniciar ou der
+  `OUT_OF_MEMORY`. Se der, esvazie o cache de páginas antes (`sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'`).
+- **Internet na primeira execução:** o I5 baixa o Whisper (fica no volume `i5-cache`) e o I7, o OCR
+  (volume `i7-cache`).
+
+## 3. Subir e testar
+
+```bash
+cd /opt/ods/p3/builds/inf
+./inf.sh              # ou ../ods.sh trocar inf
+./inf.sh status
+./inf.sh testar       # → resultados/aceite-inf-<data>.txt
+```
+
+O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, roda I3, I8, I5
+(áudio), I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo.
+
+### Resultado esperado
+
+| Item | Esperado | Observação |
+|---|---|---|
+| T-I1, T-I2, T-I9 | PASSOU | O I1 com `app-epi` no `epi.mp4`; I2 e I9 consomem as detecções |
+| T-I1M | PASSOU | Sem reinício nem `OUT_OF_MEMORY` no I1 durante o teste |
+| T-I3 | PASSOU | Rodar de novo só reanuncia (`artifact.published`); `calibration` pode não crescer |
+| T-I4 | PASSOU ou AVISO | AVISO = pontos-chave publicados, nenhum sinal reconhecido no `teste.mp4` |
+| T-I5 | PASSOU | Modo `continuo` (sem a palavra de ativação "lexie") |
+| T-I6 | PASSOU | Uma leitura por volta do vídeo de QR (20 s) |
+| T-I7 | PASSOU ou AVISO | AVISO = nenhuma placa com confiança ≥ 0,9 nos 20 quadros |
+| T-I8 | PASSOU | 4 eventos (CONFORMING, NON_CONFORMING, ANOMALY, UNCERTAIN) |
+
+### Para conferir cada um à mão
+
+```bash
+./inf.sh contar                 # mensagens por tópico
+./inf.sh i1 VER5 50             # placas no cam0.mp4 (I1) → ods.i1.detections e ods.i2.tracks
+./inf.sh log i4                 # reconhecimento ao vivo
+alias dc='docker compose --env-file inf.env $( [ -f inf.local.env ] && echo --env-file inf.local.env )'
+dc logs --tail 30 i5
+```
+
+## 4. Riscos conhecidos (primeira construção na placa)
+
+- **I4:** `requirements-i4.txt` pede `mediapipe>=0.10.14` sem teto; a versão mais nova no PyPI (1.2.3)
+  tem roda para aarch64, mas não foi testada com o código do I4. O servidor C++ compila o Crow e o
+  OpenCV do Ubuntu 24.04 na placa (alguns minutos).
+- **I7:** a equipe nunca construiu a imagem em ARM64 (`RODAR_NA_JETSON.md` do I7). O `p2-build
+  --cpu-only` roda durante o build.
+- **I3:** Python 3.14 e `opencv-python-headless` 5.0 (há roda aarch64 no PyPI).
+- **I6:** o vídeo de QR é um exemplo do P3, não da VER-2.
+
+## 5. Remover
+
+```bash
+./limpar.sh               # containers (volumes ficam)
+./limpar.sh --imagens     # também as imagens (as que outra build usa ficam com --manter <app>)
+./limpar.sh --tudo        # também volumes (pede "inf") e clones exclusivos
+```
+
+O I1 (`builds/i1`) e o vídeo `VIDEO_DIR/inf-qr.mp4` não saem.
