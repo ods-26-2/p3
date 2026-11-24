@@ -1,6 +1,6 @@
 # Teste individual do I1 na GPU (TensorRT via P2)
 
-> **Build dedicada do I1** (orquestrador sempre de pé, `builds/i1/`): o guia de teste está em [`GUIA-BUILD-I1.md`](GUIA-BUILD-I1.md). Os testes abaixo são do I1 dentro do A8 (`run_detector.py`).
+> **Build dedicada do I1** (orquestrador sempre de pé, `builds/i1/`): o guia de teste está em [`GUIA-BUILD-I1.md`](GUIA-BUILD-I1.md). O `testar-i1-servico.sh` usa por padrão o serviço `i1` dessa build (`--build a8` para o do A8); os demais testes abaixo são do I1 dentro do A8 (`run_detector.py`).
 
 Este teste prova, só com o I1 e sem Kafka, que a detecção roda na GPU da Jetson usando a engine TensorRT compilada pelo P2.
 

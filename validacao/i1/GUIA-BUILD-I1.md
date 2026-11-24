@@ -163,6 +163,23 @@ Para encerrar um pedido longo: `./i1.sh comando '{"action": "STOP", "squad": "VE
 
 ---
 
+## 4b. Testes do repositório do I1 (opcional, recomendado)
+
+O `./i1.sh testar` (seção 5) é o teste de aceitação do P3: trata o I1 como caixa-preta, pelo Kafka. Os testes **do próprio repositório** (`I1/tests`, inclusive os 6 do orquestrador) rodam à parte, dentro de um container com a mesma imagem, GPU, variáveis e engines do serviço `i1`, sem publicar no Kafka:
+
+```bash
+cd /opt/ods/p3/validacao/i1
+./testar-i1-servico.sh            # serviço i1 da build dedicada (padrão); --build a8 para o do A8
+```
+
+| Item | Esperado |
+|---|---|
+| S01 | Imagem `ods-i1-gpu:3b2a9cc…` existe e bate com o `I1_REF` do `i1.env` |
+| S02 | 45 de 46 testes ok; só o `test_05` dá erro, esperado: precisa do `ultralytics` (caminho de CPU), que a imagem Jetson não instala (conferido fora da placa em 23/11/2026) |
+| S03 | `CMD` padrão da imagem (`run_detector` nas 9 fixtures de placas, saída em stdout): código 0, mensagens com `artifact_version` `app-plates-1.0.0-fp16` |
+
+Relatório: `validacao/i1/resultados/i1-servico-<data>.txt`.
+
 ## 5. Passo 3 — teste de aceitação
 
 ```bash

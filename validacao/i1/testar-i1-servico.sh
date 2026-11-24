@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# testar-i1-servico.sh — os testes do próprio I1, rodando no mesmo serviço que a build do A8 sobe.
+# testar-i1-servico.sh — os testes do próprio I1, rodando no mesmo serviço que uma build do P3 sobe.
 #
-# Lê a definição do serviço "i1" do builds/a8/docker-compose.yml (docker compose config) e
+# Lê a definição do serviço "i1" do builds/<build>/docker-compose.yml (docker compose config) e
 # roda um container com exatamente a mesma imagem, runtime (nvidia), variáveis de ambiente
 # (P2_BACKEND=trt, P2_ENGINE_DIR, ODS_KAFKA_BROKER…) e volumes (engines). Só fica de fora o
 # "ipc: service:p4" e a memória compartilhada /tmp, que ligam o I1 ao P4 tocando vídeo: sem
@@ -14,7 +14,8 @@
 #   S03 o comando padrão da imagem (CMD do Dockerfile.jetson: run_detector nas fixtures,
 #       backend p2) dentro do serviço: código 0, mensagens válidas e artifact_version …-fp16
 #
-#   ./testar-i1-servico.sh
+#   ./testar-i1-servico.sh              serviço i1 da build dedicada (builds/i1, orquestrador)
+#   ./testar-i1-servico.sh --build a8   serviço i1 da build do A8 (perfil video)
 # Resultado: validacao/i1/resultados/i1-servico-<data>.txt (+ pasta com as saídas completas).
 set -euo pipefail
 [[ -n "${LC_ALL:-}" ]] && export LC_ALL=C.UTF-8
@@ -22,8 +23,15 @@ export LC_NUMERIC=C
 
 AQUI="$(dirname "$(readlink -f "$0")")"
 P3="$(readlink -f "$AQUI/../..")"
-BUILD="$P3/builds/a8"
-case "${1:-}" in -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+NOME_BUILD=i1
+case "${1:-}" in
+  -h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  --build) NOME_BUILD=${2:?--build precisa de i1 ou a8} ;;
+  "") ;;
+  *) echo "opção desconhecida: $1 (use --build i1|a8)" >&2; exit 1 ;;
+esac
+[[ "$NOME_BUILD" == i1 || "$NOME_BUILD" == a8 ]] || { echo "--build aceita i1 ou a8" >&2; exit 1; }
+BUILD="$P3/builds/$NOME_BUILD"
 
 if [[ -t 1 ]]; then V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; NC=$'\e[0m'; else V=; A=; R=; NC=; fi
 etapa() { echo; echo "== $*"; }
@@ -46,7 +54,7 @@ relatorio() {
   {
     echo "Testes do I1 no serviço da build do A8 — $(date '+%Y-%m-%d %H:%M:%S %z')"
     echo "Placa: $(uname -n) · $(tr -d '\0' </proc/device-tree/model 2>/dev/null || echo '?')"
-    echo "Serviço: builds/a8 → i1 · imagem ${IMG:-?}"
+    echo "Serviço: builds/$NOME_BUILD → i1 · imagem ${IMG:-?}"
     echo "Configuração usada (do docker compose config):"
     sed 's/^/  /' "$SAIDA/servico.txt" 2>/dev/null || true
     echo
@@ -61,15 +69,21 @@ relatorio() {
 trap relatorio EXIT
 
 # ---- definição do serviço -------------------------------------------------------------------
-etapa "Lendo o serviço i1 de builds/a8/docker-compose.yml"
+etapa "Lendo o serviço i1 de builds/$NOME_BUILD/docker-compose.yml"
 cd "$BUILD"
-SEC=a8.secrets.env
-if [[ ! -f "$SEC" ]]; then
-  # Sem os segredos reais, valores de mentira bastam para renderizar o compose (o i1 não usa)
-  SEC="$SAIDA/segredos-falsos.env"
-  grep -oE '^[A-Z0-9_]+=' a8.secrets.env.exemplo | sed 's/=$/=nao-usado/' > "$SEC"
+ENVS=(--env-file "$NOME_BUILD.env")
+if [[ "$NOME_BUILD" == a8 ]]; then
+  SEC=a8.secrets.env
+  if [[ ! -f "$SEC" ]]; then
+    # Sem os segredos reais, valores de mentira bastam para renderizar o compose (o i1 não usa)
+    SEC="$SAIDA/segredos-falsos.env"
+    grep -oE '^[A-Z0-9_]+=' a8.secrets.env.exemplo | sed 's/=$/=nao-usado/' > "$SEC"
+  fi
+  ENVS+=(--env-file "$SEC" --profile video)
+elif [[ -f i1.local.env ]]; then
+  ENVS+=(--env-file i1.local.env)
 fi
-docker compose --env-file a8.env --env-file "$SEC" --profile video config --format json > "$SAIDA/compose.json" \
+docker compose "${ENVS[@]}" config --format json > "$SAIDA/compose.json" \
   || erro "docker compose config falhou em $BUILD"
 # Gera os argumentos do docker run (um por linha) e um resumo legível
 python3 - "$SAIDA/compose.json" "$SAIDA/args.txt" "$SAIDA/servico.txt" <<'PY'
@@ -82,7 +96,9 @@ if s.get("runtime"):
 for k, v in sorted((s.get("environment") or {}).items()):
     args += ["-e", f"{k}={v}"]; resumo.append(f"env: {k}={v}")
 for vol in s.get("volumes") or []:
-    if vol.get("type") == "bind":
+    if vol.get("target") == "/tmp":
+        resumo.append(f"fora do teste: {vol.get('source')} → /tmp (sockets do P4)")
+    elif vol.get("type") == "bind":
         ro = ":ro" if vol.get("read_only") else ""
         args += ["-v", f"{vol['source']}:{vol['target']}{ro}"]; resumo.append(f"volume: {vol['source']} → {vol['target']}{ro}")
     else:
@@ -98,14 +114,14 @@ sed 's/^/  /' "$SAIDA/servico.txt"
 servico() { docker run --rm "${ARGS[@]}" "$@"; }
 
 # ---- S01 ------------------------------------------------------------------------------------
-I1_REF=$(sed -n 's/^I1_REF=//p' a8.env)
+I1_REF=$(sed -n 's/^I1_REF=//p' "$NOME_BUILD.env")
 if ! docker image inspect "$IMG" >/dev/null 2>&1; then
-  item S01 FALHOU "a imagem $IMG não existe (rode ./a8.sh)"; exit 1
+  item S01 FALHOU "a imagem $IMG não existe (rode ./$NOME_BUILD.sh)"; exit 1
 fi
 if [[ "$IMG" == *":$I1_REF" ]]; then
   item S01 PASSOU "imagem $IMG ($(docker image inspect -f '{{.Size}}' "$IMG" | awk '{printf "%.1f GB", $1/1e9}')), commit fixado da develop"
 else
-  item S01 FALHOU "o serviço usa $IMG, mas o I1_REF do a8.env é $I1_REF"
+  item S01 FALHOU "o serviço usa $IMG, mas o I1_REF do $NOME_BUILD.env é $I1_REF"
 fi
 
 # ---- S02: suíte do repositório --------------------------------------------------------------

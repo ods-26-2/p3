@@ -372,3 +372,22 @@
 ### 2026-11-23 — decisão: testar o I1 no Kafka da placa
 - Usuário: seguir com o teste no Kafka local. Feito: suporte genérico a <app>.local.env (fora do Git) na lib (source depois do <app>.env e --env-file por último no dc) + builds/i1/i1.local.env.exemplo (172.18.4.56:9093, KAFKA_CONTAINER=kafka).
 - Testado com docker falso: sem local.env → erro com dica do i1.local.env; com local.env → checa container kafka e compose recebe --env-file i1.local.env por último.
+
+### 2026-11-23 — Jetson: git pull barrado por temp/PROGRESSO.md alterado na placa; A8 de pé com s4/s5 'Created' (127.0.0.1:8000 já ocupado)
+- Orientação: guardar cópia do PROGRESSO da placa, git checkout -- temp/PROGRESSO.md, pull; ver quem ocupa a 8000; parar o A8 antes do teste do I1 (I2 do A8 consome ods.i1.detections no Kafka da placa).
+
+### 2026-11-23 — Jetson: ./i1.sh parou no checar_disco (2 GB livres; mínimo 4 + ~2,5 da imagem nova)
+- Orientação: diagnóstico (docker system df, imagens por tamanho, ods.sh lista, du de /var/lib/ods) e passos seguros: builder prune -af; ods-i1-gpu:cb5c381 obsoleta (A8/A5 agora em 3b2a9cc) sai depois do ./a8.sh parar. Remover imagens de apps só com decisão do usuário.
+- Observação: a dica da lib '../ods.sh trocar i1' não serve bem para build permanente (corrigir depois).
+- Saída da Jetson: 2,0 GB livres; ods-i1-gpu:3b2a9cc JÁ EXISTE (não precisa construir); ods-i1-gpu:cb5c381 obsoleta; ods-i1:30df178 (CPU, só A3/A4, nunca rodados na placa); ods-i5-gpu/ods-i5/ods-aceite-i5 d7b1379 não vêm de nenhum .env do repo (trabalho feito na placa? perguntar); volumes 1,6 GB reclamáveis (não mexer). Recomendado: rmi cb5c381 + 30df178 e conferir df.
+
+### 2026-11-23 — 1º ./i1.sh na Jetson (Kafka da placa via i1.local.env): I1 PRONTO
+- Disco: ods-i1:30df178 removida (2,0 → 4,8 GB); fim da subida com 7 GB livres (cb5c381 removida também, presumivelmente).
+- Imagem ods-i1-gpu:3b2a9cc já existia (sem build). drop_caches: 363 → 2858 MB livres.
+- Engines: plates e epi conferidas; industry compilada sem erro; sports (1280) compilada, mas o TensorRT pulou 3 táticas por falta de memória da GPU (pedia 485 MB; NvMap error 12) → engine válida (passou na entrada zerada), possivelmente não a mais rápida. Recompilar com mais memória livre se o desempenho do INV1 ficar ruim.
+- Orquestrador: "Aguardando comandos em 'ods.i1.command' (broker='172.18.4.56:9093', backend='p2', mode='kafka', videos_dir='/videos')".
+- Próximo: ./i1.sh status, pedido manual VER5, ./i1.sh testar.
+
+### 2026-11-23 — pergunta: ./i1.sh testar roda os testes do repo do I1? Não.
+- testar-i1-servico.sh passa a aceitar --build i1|a8 (padrão i1): lê i1.env (+ i1.local.env), sem segredos/perfil; o bind de I1_P4_DIR em /tmp fica fora do teste. S03 continua em stdout (run_detector só lê o broker do ambiente).
+- Suíte do 3b2a9cc fora da placa (venv): 46 testes, só test_05 com erro (ultralytics) → S02 deve passar com 45/46.
