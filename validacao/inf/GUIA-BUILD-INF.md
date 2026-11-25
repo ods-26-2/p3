@@ -15,9 +15,9 @@ aplicações (`ods-i2`, `ods-i6`, `ods-i9`, se o A8, o A2 e o A5 já as constru�
 | I2 rastreio | `i2` | contínuo | `ods.i1.detections` | `ods.i2.tracks` |
 | I3 calibração | `i3` | `./inf.sh i3` | imagem da quadra do A4 (repo do I3) | `ods.i3.calibration`, `ods.artifact.published` |
 | I4 Libras | `i4-server` + `i4` | contínuo | `./inf.sh i4` (vídeo `teste.mp4` do I4) ou o `webcam.py` do I4 | `ods.i4.sign`, `ods.i4.keypoints`, `ods.i4.facial_marker` |
-| I5 fala | `i5` | contínuo | `./inf.sh i5` (áudio como se fosse o P5, em `ods.p5.audio_chunk`) | `ods.i5.transcript` |
+| I5 fala | `i5` (**fora da build desde 24/11/2026**, comentado no compose; o usuário tem build própria do I5) | — | `./inf.sh i5` (áudio como se fosse o P5, em `ods.p5.audio_chunk`) | `ods.i5.transcript` |
 | I6 QR | `i6` | contínuo | `VIDEO_DIR/inf-qr.mp4` em laço (gerado pelo P3) | `ods.i6.code_read` |
-| I7 placas | `i7` | `./inf.sh i7` | `VIDEO_DIR/cam0.mp4` (20 quadros amostrados) | `ods.i7.plate_read` |
+| I7 placas | `i7` | `./inf.sh i7`, **detector na GPU** | `VIDEO_DIR/cam0.mp4` (20 quadros amostrados) | `ods.i7.plate_read` |
 | I8 peças | `i8` | `./inf.sh i8` | 4 eventos de exemplo do próprio I8 (sem modelo no repo) | `ods.industria.defeito_classificado` |
 | I9 EPI | `i9` | contínuo | `ods.i1.detections` (I1 com a equipe VER3/VER6) | `ods.i9.ppe_compliance` |
 
@@ -27,7 +27,11 @@ Commits no `builds/inf/inf.env`. Diferenças em relação às builds das aplica�
 - **I4 `503f64b`** (o A6 usa `61b39a1`): agora há o servidor C++ e o reconhecimento ao vivo em container.
 - **I5 `d7b1379`** (o A7 usa `cdb00d2`): imagem do P3 em CPU, `ods-i5-cpu`. O `Dockerfile.jetson` da
   equipe usa `l4t-pytorch:r35.2.1` (JetPack 5), que não roda no JetPack 6.2.1 da placa.
-- **I7 `1441bbb`** (o A8 usa `a4da4b0`): lê vídeo (`--video`) e o P4 (`--p4`) sozinho; detector pelo P2 em CPU.
+- **I7 `1441bbb`** (o A8 usa `a4da4b0`): lê vídeo (`--video`) e o P4 (`--p4`) sozinho. **Detector na GPU**
+  (imagem do P3 `ods-i7-gpu`, decisão de 24/11/2026): o pacote `app-plates` 1.0.0 do I7 é o mesmo ONNX do I1
+  (sha256 `b698a519…`), então o I7 lê a engine FP16 que o `builds/i1` já compilou em
+  `/var/lib/ods/engines/app-plates-1.0.0`. Mesma base `l4t-tensorrt` e mesmo P2 0.2.0a1 do I1, sem PyTorch;
+  o OCR fica em CPU. Exige o I1 com as engines prontas (`builds/i1/i1.sh engines`).
 
 ## 2. Antes de subir
 
@@ -68,9 +72,9 @@ O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, r
 | T-I1M | PASSOU | Sem reinício nem `OUT_OF_MEMORY` no I1 durante o teste |
 | T-I3 | PASSOU | Rodar de novo só reanuncia (`artifact.published`); `calibration` pode não crescer |
 | T-I4 | PASSOU ou AVISO | AVISO = pontos-chave publicados, nenhum sinal reconhecido no `teste.mp4` |
-| T-I5 | PASSOU | Modo `continuo` (sem a palavra de ativação "lexie") |
+| T-I5 | AVISO | I5 fora da build (comentado no compose) |
 | T-I6 | PASSOU | Uma leitura por volta do vídeo de QR (20 s) |
-| T-I7 | PASSOU ou AVISO | AVISO = nenhuma placa com confiança ≥ 0,9 nos 20 quadros |
+| T-I7 | PASSOU ou AVISO | Roda depois do I1 (os dois usam a GPU). FALHOU se a `artifact_version` não terminar em `-fp16` (caiu para CPU). AVISO = nenhuma placa com confiança ≥ 0,9 nos 20 quadros |
 | T-I8 | PASSOU | 4 eventos (CONFORMING, NON_CONFORMING, ANOMALY, UNCERTAIN) |
 
 ### Para conferir cada um à mão
@@ -88,8 +92,10 @@ dc logs --tail 30 i5
 - **I4:** `requirements-i4.txt` pede `mediapipe>=0.10.14` sem teto; a versão mais nova no PyPI (1.2.3)
   tem roda para aarch64, mas não foi testada com o código do I4. O servidor C++ compila o Crow e o
   OpenCV do Ubuntu 24.04 na placa (alguns minutos).
-- **I7:** a equipe nunca construiu a imagem em ARM64 (`RODAR_NA_JETSON.md` do I7). O `p2-build
-  --cpu-only` roda durante o build.
+- **I7 (GPU):** imagem do P3 nunca construída na placa. Versões fixadas para o Python 3.10 da base
+  (`opencv-python-headless` 4.11.0.86, porque o 4.12+ exige numpy 2 e o P2 pede < 2; `onnxruntime` 1.23.2,
+  o último com roda cp310 aarch64). A engine vem do I1: se ele recompilar o `app-plates`, o I7 usa a nova.
+  O I7 e o I1 juntos na GPU dividem a RAM: no `testar` o I7 roda depois do I1.
 - **I3:** Python 3.14 e `opencv-python-headless` 5.0 (há roda aarch64 no PyPI).
 - **I6:** o vídeo de QR é um exemplo do P3, não da VER-2.
 

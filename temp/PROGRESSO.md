@@ -2,9 +2,9 @@
 
 ## Estado atual
 - Aplicação em foco: build "inf" (todas as inferências I1–I9; uma pasta, uma seção do compose por I; I1 = builds/i1)
-- Fase: compose + scripts prontos; validado só fora da placa (config real, shellcheck, docker simulado)
-- Último resultado: builds/inf completa; simulação de subir/testar/limpar passou nos caminhos de sucesso e falha
-- Próximo passo: usuário decide o commit; na Jetson: builds/i1/i1.sh status → cd builds/inf → ./inf.sh → ./inf.sh testar
+- Fase: build na Jetson parou por disco cheio na última imagem (I7); I7 trocado para GPU (ods-i7-gpu), validado só fora da placa
+- Último resultado: todas as imagens da inf na placa menos a do I7; simulação do T-I7 GPU ok
+- Próximo passo: commit (I7 GPU + I5 fora); na placa: rmi ods-i5-cpu, ods-i5:d7b1379, ods-aceite-i5:1 (manter ods-i5-gpu), builder prune, git pull, ./inf.sh subir (só constrói ods-i7-gpu), ./inf.sh testar
 - Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (TRA-1) desligado; imagens ods-i5* d7b1379 de quem?; dica "../ods.sh trocar" da lib para build permanente; A2 segue sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -433,3 +433,33 @@
 - Simulação (docker falso em scratchpad/sim): subir (etapas de build na ordem; gera vídeo de QR), testar sucesso (PASSOU 10) e falha (I7 código 3, I5 sem transcrição → FALHOU 2, rc 1), broker diferente do I1 → recusa, i1 com quadros inválidos → erro, contar, status, limpar --imagens, ods.sh lista (inf aparece).
 - Sem commit.
 - Próximo: usuário decide o commit; na Jetson: git pull; builds/i1/i1.sh status; cd builds/inf; (cp inf.local.env.exemplo inf.local.env se o I1 estiver no Kafka da placa); ./inf.sh; ./inf.sh testar.
+
+### 2026-11-24 — commits
+- 9eb1ea4 (I1: aceite 16/0/1 e INV1=150) e 73564ba (build inf). A2 fora (segue sem commit). Sem push.
+
+### 2026-11-24 — Jetson: ./ods.sh trocar inf em andamento (construindo; ~7,9 GB livres)
+- Containers fora do p3: ods-i5-kafka-topicos-1 (projeto ods-i5, 4 dias, origem desconhecida, mesmo das imagens ods-i5*:d7b1379); a8-mysql (projeto "a8", compose da própria VER-5, anterior à nossa build; volume a8_mysql_data 197 MB). Não mexer sem os donos; candidatos se o disco apertar.
+- Imagens da placa no containerd (/var/lib/containerd). docker system df -v falha durante build (corrida com o apt); usar df -h /.
+
+### 2026-11-24 — Jetson: DISCO CHEIO no build da inf ("no space left on device" ao gravar o metadata do compose build)
+- Começou com ~7,9 GB livres. checar_disco só roda entre etapas; uma etapa (provável imagem com torch) passou do limite. Hipótese: containerd snapshotter guarda blobs comprimidos + camadas descompactadas (~2x).
+- Orientação: conferir Kafka da turma; docker builder prune -af; ver etapa no ~/build-inf.log; não usar system/image prune -a.
+- Imagens após a falha: todas da inf construídas MENOS ods-i7:1441bbb (a última etapa). ods-i5-cpu 3,16 GB, ods-i4 2,55, ods-i4-server 1,42, ods-i1-gpu 6,08.
+- Fora do p3 (projeto ods-i5, origem desconhecida, nomes no padrão do p3: ods-aceite-i5:1): ods-i5:d7b1379 3,17 GB + ods-i5-gpu:d7b1379 5,99 GB + ods-aceite-i5:1 0,3 GB = ~9,5 GB. Pedido ao usuário: de quem é (working_dir do ods-i5-kafka-topicos-1).
+- O grep do build-inf.log não acha "Construindo": o cabeçalho da etapa vai só para o terminal (a lib faz tee só da saída do build).
+
+### 2026-11-24 — decisão do usuário: I7 da inf na GPU (P3, base l4t-tensorrt como o I1, P2 trt, sem torch)
+- Próximo: conferir API do P2 0.1.0 (I7) x 0.2.0a1 (I1), deps do fast-alpr, receita do Dockerfile.jetson do I1.
+- Feito: builds/inf i7 → imagem do P3 ods-i7-gpu (dockerfile_inline, base TRT_BASE_IMAGE = l4t-tensorrt r10.3.0, P2 0.2.0a1 [trt], sem torch/ultralytics; opencv-headless 4.11.0.86 e onnxruntime 1.23.2 fixados por causa de numpy<2 e cp310 aarch64), runtime nvidia, engine ENGINES_DIR/app-plates-1.0.0 do I1 em :ro (mesmo ONNX, sha256 b698a519…; metadata idêntico; API do P2 0.1.0→0.2.0a1 compatível com detector_p2.py).
+- inf.sh: checar_gpu_i7 (runtime nvidia + engine), aviso no subir; no testar o I7 roda depois do I1/I9 e o T-I7 exige artifact_version -fp16 (prova de TensorRT).
+- Validado fora da placa: compose config (v2.32.4), shellcheck, simulação (GPU ok → PASSOU; fp32 → FALHOU; sem nvidia → FALHOU sem abortar; ./inf.sh i7 sem engine → erro com dica).
+- Observação: P2 v0.2.0a3 já traz Whisper (whisper_setup) → possível caminho para o I5 na GPU depois.
+- Próximo: commit; na placa: liberar disco (ods-i5* de origem desconhecida, ~9,5 GB, após confirmar dono), git pull, ./inf.sh subir (constrói só o ods-i7-gpu), ./inf.sh testar.
+
+### 2026-11-24 — decisão do usuário: I5 fora da build inf (comentado) e manter só a imagem I5 mais recente
+- Imagens na placa (lista do usuário): ods-i5-cpu 24/11 (nossa), ods-i5-gpu 20/11, ods-aceite-i5:1 19/11, ods-i5 19/11. O usuário chama de "meu i5" a build própria dele (projeto ods-i5); "mais recente" = ods-i5-gpu (confirmado pelo usuário).
+- Feito: compose com i5, i5-audio e volume i5-cache comentados (cabeçalho explica como voltar); inf.sh sem i5 em ETAPAS, aceite_conferir, disparo e comando (erro claro); T-I5 vira AVISO "fora da build". GUIA, README, CLAUDE.md atualizados.
+- Validado: compose config (serviços kafka-topicos i2 i4-server i4 i6 i9), shellcheck, simulação PASSOU 9 / AVISO 1 (T-I5).
+- Placa: remover ods-i5-cpu (não usada), ods-i5:d7b1379 e ods-aceite-i5:1 (mais antigas); manter ods-i5-gpu.
+- Confirmado pelo usuário: das imagens de I5 fica só a ods-i5-gpu:d7b1379 (saem ods-i5-cpu, ods-i5:d7b1379 e ods-aceite-i5:1).
+- Commit pedido pelo usuário (I7 GPU + I5 fora).

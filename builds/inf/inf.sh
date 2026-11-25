@@ -3,15 +3,16 @@
 #
 #   ./inf.sh               o mesmo que ./inf.sh subir
 #   ./inf.sh subir         confere a placa e o I1, baixa o código, constrói o que falta (em etapas,
-#                          com limpeza) e sobe os contínuos: i2, i4-server, i4, i5, i6, i9
+#                          com limpeza) e sobe os contínuos: i2, i4-server, i4, i6, i9
 #   ./inf.sh subir --reconstruir   reconstrói todas as imagens
 #   ./inf.sh i1 [EQUIPE] [QUADROS] pede detecções ao I1 (builds/i1) por ods.i1.command
 #                          (padrão: INF_I1_EQUIPE e INF_I1_QUADROS do inf.env; equipes do I1:
 #                          VER5 placas, VER3/VER6 EPI, VER1 indústria, INV1 esporte)
 #   ./inf.sh i3            calibração da quadra do A4 → ods.i3.calibration + ods.artifact.published
 #   ./inf.sh i4            manda I4_VIDEO ao servidor do I4 (como a webcam) → ods.i4.*
-#   ./inf.sh i5            manda I5_AUDIO como se fosse o P5 → o i5 transcreve em ods.i5.transcript
-#   ./inf.sh i7            lê placas de VIDEO_DIR/I7_VIDEO → ods.i7.plate_read
+#   (I5 fora da build desde 24/11/2026: ver o docker-compose.yml)
+#   ./inf.sh i7            lê placas de VIDEO_DIR/I7_VIDEO → ods.i7.plate_read (detector na GPU,
+#                          com a engine app-plates que o I1 compila)
 #   ./inf.sh i8            publica os 4 eventos de exemplo do I8 → ods.industria.defeito_classificado
 #   ./inf.sh contar        mensagens por tópico das inferências
 #   ./inf.sh testar        dispara todas e confere cada tópico → resultados/aceite-inf-*.txt
@@ -24,7 +25,8 @@
 APP=inf
 SEGREDOS=()
 # Menores primeiro, as maiores (torch) por último e sozinhas: o disco da Jetson é pequeno.
-ETAPAS=("i2 i3 i6 i9 i4-video" "i8" "i4-server" "i4" "i5" "i7")
+# I5 fora (24/11/2026): para voltar, "i5" de novo entre "i4" e "i7"
+ETAPAS=("i2 i3 i6 i9 i4-video" "i8" "i4-server" "i4" "i7")
 ONESHOT=(kafka-topicos)
 
 # shellcheck source=../comum/lib.sh
@@ -60,15 +62,25 @@ checar_i1() {
 
 # ---------------------------------------------------------------- conferências
 
+# O I7 roda o detector na GPU com a engine que a build do I1 compila (I1_PACOTES).
+checar_gpu_i7() {
+  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"' \
+    || erro "o Docker desta placa não tem o runtime nvidia; o I7 (TensorRT) não roda sem ele"
+  [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]] \
+    || erro "falta a engine $ENGINES_DIR/app-plates-1.0.0 do I7 (a mesma do I1). Compile com: ../i1/i1.sh engines"
+}
+
 checar_entradas() {
   checar_i1
   [[ -d "$VIDEO_DIR" ]] || erro "falta a pasta $VIDEO_DIR (a do I1). Rode antes: ../i1/i1.sh videos"
   [[ -w "$VIDEO_DIR" ]] || aviso "sem escrita em $VIDEO_DIR: o vídeo de QR do I6 não poderá ser gerado.
   Uma vez só: sudo chown $(id -un) $VIDEO_DIR"
   entrada_arquivo "$VIDEO_DIR/$I7_VIDEO" "vídeo do I7" "o ./inf.sh i7 não terá o que ler"
+  if [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]]; then ok "engine do I7 (GPU): $ENGINES_DIR/app-plates-1.0.0"
+  else aviso "sem a engine $ENGINES_DIR/app-plates-1.0.0: o ./inf.sh i7 não roda até ../i1/i1.sh engines"; fi
   # I4_VIDEO e I5_AUDIO_DIR ficam nos clones: no primeiro "subir" ainda não existem.
   [[ -d "$SRC_DIR/i4" ]] && entrada_arquivo "$I4_VIDEO" "vídeo do I4" "o ./inf.sh i4 não terá o que mandar"
-  [[ -d "$SRC_DIR/i5" ]] && entrada_arquivo "$I5_AUDIO_DIR/$I5_AUDIO" "áudio do I5" "o ./inf.sh i5 não terá o que mandar"
+  # I5 fora: [[ -d "$SRC_DIR/i5" ]] && entrada_arquivo "$I5_AUDIO_DIR/$I5_AUDIO" "áudio do I5" "o ./inf.sh i5 não terá o que mandar"
   livre_ram_mb >/dev/null
   return 0
 }
@@ -93,7 +105,7 @@ pos_subida() {
   gerar_video_qr
   entrada_arquivo "$VIDEO_DIR/$I6_VIDEO" "vídeo do I6 (relido em laço)" "o I6 fica tentando abrir"
   echo
-  echo "Contínuos de pé. Para disparar cada inferência: ./inf.sh i1 | i3 | i4 | i5 | i7 | i8"
+  echo "Contínuos de pé. Para disparar cada inferência: ./inf.sh i1 | i3 | i4 | i7 | i8"
   echo "Tudo de uma vez, conferindo os tópicos: ./inf.sh testar"
   echo "Webcam no I4: python webcam.py --url ws://<placa>:18080/ws/video (I4_SERVER_BIND=$I4_SERVER_BIND)"
 }
@@ -157,7 +169,8 @@ esperar_topico() {   # esperar_topico <tópico> <segundos>: até chegar mensagem
 
 testar() {
   etapa "Conferindo"
-  aceite_conferir i2 i4-server i4 i5 i6 i9
+  # I5 fora: voltar a conferir o i5 aqui
+  aceite_conferir i2 i4-server i4 i6 i9
   checar_i1
   local c1; c1=$(container_i1)
   [[ -n "$c1" && "$(docker inspect -f '{{.State.Status}}' "$c1")" == running ]] \
@@ -178,13 +191,20 @@ testar() {
   local cod_i3=0 cod_i8=0 cod_i5=0 cod_i4=0 cod_i7=0
   echo "-- I3";  rodar i3 i3  || cod_i3=$?
   echo "-- I8";  rodar i8 i8  || cod_i8=$?
-  echo "-- I5 (áudio como P5)"; rodar i5 i5-audio || cod_i5=$?
+  # I5 fora: echo "-- I5 (áudio como P5)"; rodar i5 i5-audio || cod_i5=$?
   echo "-- I4 (vídeo como webcam)"; rodar i4 i4-video || cod_i4=$?
-  echo "-- I7 (placas no vídeo)"; rodar i7 i7 || cod_i7=$?
 
-  etapa "Esperando o I1/I9 e o processamento do I5 e do I4"
+  etapa "Esperando o I1/I9 e o processamento do I4"
   esperar_topico ods.i9.ppe_compliance 180 || true
   sleep 30
+  # Só depois do I1: os dois usam a GPU, que divide a RAM da placa
+  echo "-- I7 (placas no vídeo, GPU)"
+  # Subshell: o erro (sem GPU/engine) vira falha do T-I7 em vez de encerrar o teste
+  if (checar_gpu_i7); then rodar i7 i7 2>&1 | tee resultados/.i7.log || cod_i7=$?; else cod_i7=99; fi
+  # Prova de TensorRT: a versão do detector vem da engine do P2 (…-fp16); em CPU seria …-fp32
+  local versao_i7
+  versao_i7=$(grep -o 'artifact_version=[^ |]*' resultados/.i7.log 2>/dev/null | tail -1 | cut -d= -f2 || true)
+  rm -f resultados/.i7.log
   offsets > "$DEPOIS"
   local ram_depois restarts_depois oom
   ram_depois=$(livre_ram_mb)
@@ -209,18 +229,22 @@ testar() {
   elif (( d > 0 )); then registrar T-I4 PASSOU "I4 sinais" "sign +$d, keypoints +$(delta ods.i4.keypoints), facial_marker +$(delta ods.i4.facial_marker)"
   elif (( $(delta ods.i4.keypoints) > 0 )); then registrar T-I4 AVISO "I4 sinais" "sem sinal reconhecido; keypoints +$(delta ods.i4.keypoints)"
   else registrar T-I4 FALHOU "I4 sinais" "nada publicado (dc logs i4 i4-server)"; fi
-  d=$(delta ods.i5.transcript)
-  if (( cod_i5 != 0 )); then registrar T-I5 FALHOU "I5 transcrição" "envio do áudio terminou com código $cod_i5"
-  elif (( d > 0 )); then registrar T-I5 PASSOU "I5 transcrição" "$d mensagens (audio_chunk +$(delta ods.p5.audio_chunk))"
-  elif [[ "$I5_MODO" == wake-word ]]; then registrar T-I5 AVISO "I5 transcrição" "nenhuma; modo wake-word: o áudio diz \"lexie\"?"
-  else registrar T-I5 FALHOU "I5 transcrição" "nenhuma (dc logs i5)"; fi
+  # I5 fora da build (24/11/2026): sem disparo nem conferência
+  registrar T-I5 AVISO "I5 transcrição" "I5 fora da build inf (comentado no docker-compose.yml)"
+  # d=$(delta ods.i5.transcript)
+  # if (( cod_i5 != 0 )); then registrar T-I5 FALHOU "I5 transcrição" "envio do áudio terminou com código $cod_i5"
+  # elif (( d > 0 )); then registrar T-I5 PASSOU "I5 transcrição" "$d mensagens (audio_chunk +$(delta ods.p5.audio_chunk))"
+  # elif [[ "$I5_MODO" == wake-word ]]; then registrar T-I5 AVISO "I5 transcrição" "nenhuma; modo wake-word: o áudio diz \"lexie\"?"
+  # else registrar T-I5 FALHOU "I5 transcrição" "nenhuma (dc logs i5)"; fi
   d=$(delta ods.i6.code_read)
   if (( d > 0 )); then registrar T-I6 PASSOU "I6 QR" "$d leituras de $I6_VIDEO"
   else registrar T-I6 FALHOU "I6 QR" "nenhuma leitura (dc logs i6)"; fi
   d=$(delta ods.i7.plate_read)
-  if (( cod_i7 != 0 )); then registrar T-I7 FALHOU "I7 placas" "terminou com código $cod_i7"
-  elif (( d > 0 )); then registrar T-I7 PASSOU "I7 placas" "$d leituras em $I7_QUADROS quadros de $I7_VIDEO"
-  else registrar T-I7 AVISO "I7 placas" "rodou, sem leitura com confiança >= 0,9 em $I7_QUADROS quadros"; fi
+  if (( cod_i7 == 99 )); then registrar T-I7 FALHOU "I7 placas (GPU)" "sem runtime nvidia ou sem a engine app-plates-1.0.0"
+  elif (( cod_i7 != 0 )); then registrar T-I7 FALHOU "I7 placas (GPU)" "terminou com código $cod_i7"
+  elif [[ "$versao_i7" != *-fp16* ]]; then registrar T-I7 FALHOU "I7 placas (GPU)" "não rodou em TensorRT (artifact_version=${versao_i7:-?})"
+  elif (( d > 0 )); then registrar T-I7 PASSOU "I7 placas (GPU)" "$d leituras em $I7_QUADROS quadros de $I7_VIDEO ($versao_i7)"
+  else registrar T-I7 AVISO "I7 placas (GPU)" "rodou em TensorRT, sem leitura com confiança >= 0,9 em $I7_QUADROS quadros"; fi
   d=$(delta ods.industria.defeito_classificado)
   if (( cod_i8 == 0 && d >= 4 )); then registrar T-I8 PASSOU "I8 eventos de exemplo" "+$d"
   else registrar T-I8 FALHOU "I8 eventos de exemplo" "código $cod_i8, +$d (esperado 4)"; fi
@@ -285,8 +309,9 @@ case "${1:-subir}" in
   i1)     shift; checar_kafka; pedir_i1 "$@" ;;
   i3)     rodar i3 i3 ;;
   i4)     rodar i4 i4-video ;;
-  i5)     rodar i5 i5-audio; echo "Transcrição em ods.i5.transcript em alguns segundos: ./inf.sh log i5" ;;
-  i7)     rodar i7 i7 ;;
+  # I5 fora: i5)     rodar i5 i5-audio; echo "Transcrição em ods.i5.transcript em alguns segundos: ./inf.sh log i5" ;;
+  i5)     erro "o I5 está fora da build inf (24/11/2026); veja o docker-compose.yml" ;;
+  i7)     checar_gpu_i7; rodar i7 i7 ;;
   i8)     rodar i8 i8 ;;
   contar) contar ;;
   log)    shift; dc logs -f --tail 50 "${1:?uso: ./inf.sh log <serviço>}" ;;

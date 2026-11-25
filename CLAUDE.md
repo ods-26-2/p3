@@ -164,7 +164,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 ### Build "inf": todas as inferências (24/11/2026; validada só fora da Jetson)
 
 - `builds/inf/` (projeto `ods-inf`): **sem `i1` próprio**; pede ao I1 de `builds/i1` por `ods.i1.command` (`./inf.sh i1 [EQUIPE] [QUADROS]`) e recusa subir se o broker do container do I1 for outro. Entra no `./ods.sh trocar inf` como as apps.
-- Contínuos: `i2`, `i4-server` + `i4` (Libras ao vivo; servidor websocket 18080 em `127.0.0.1`), `i5` (consome `ods.p5.audio_chunk`; imagem do P3 em CPU `ods-i5-cpu`), `i6` (vídeo de QR gerado pelo P3 em `VIDEO_DIR/inf-qr.mp4`), `i9`. Sob demanda: `i3` (quadra do A4, `--registro` em volume), `i4-video`, `i5-audio`, `i7` (`--video`, P2 CPU), `i8` (mocks 2.0).
+- Contínuos: `i2`, `i4-server` + `i4` (Libras ao vivo; servidor websocket 18080 em `127.0.0.1`), `i5` **fora desde 24/11** (comentado no compose a pedido do usuário, que tem build própria do I5 na placa; a imagem `ods-i5-cpu` sai), `i6` (vídeo de QR gerado pelo P3 em `VIDEO_DIR/inf-qr.mp4`), `i9`. Sob demanda: `i3` (quadra do A4, `--registro` em volume), `i4-video`, `i5-audio`, `i7` (`--video`; **detector na GPU** desde 24/11: imagem do P3 `ods-i7-gpu` na base `l4t-tensorrt` do I1, P2 0.2.0a1 [trt], lê a engine `app-plates-1.0.0` do I1 — mesmo ONNX, sha256 `b698a519…`; OCR em CPU; T-I7 exige `artifact_version` `-fp16`), `i8` (mocks 2.0).
 - Commits mais novos que os das apps: I3 `c3d876e`, I4 `503f64b`, I5 `d7b1379`, I7 `1441bbb`. Script do I8 movido para `builds/comum/i8` (o A1 também usa).
 - `./inf.sh testar`: contagem por tópico antes/depois dos disparos (T-I1…T-I9 + T-I1M memória do I1). Guia: `validacao/inf/GUIA-BUILD-INF.md`.
 - Validado: `docker compose config` (v2.32.4) com os clones reais, `bash -n`, `shellcheck`, `subir`/`testar`/`status`/`limpar` contra `docker` simulado. **Falta construir e rodar na Jetson** (I4, I5 e I7 nunca construídos em ARM64 nesta versão).
@@ -328,7 +328,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | VER-3 (I9) | Sem Dockerfile; dataset de 323 MB no repositório |
 | MOD-1 (B5) | (17/11) O pacote `app-epi` 1.0.0 (pessoa, capacete, colete) já está na develop do I1 e no B5: o A5 usa; o A3 ainda usa o de placas (pode passar a usar o `app-epi` pela classe `pessoa`). Falta engine compilada publicada (`p2-build`) |
 | INV-2 (I4, S6) | Repo `s6` vazio (S6 está em `i4/s6_synthesis`); I4 ao vivo depende de servidor C++ próprio (`503f64b` já o containeriza); `webcam.py` só abre câmera por índice (a build inf manda o vídeo com script do P3); `mediapipe` sem versão fixa |
-| VER-4 (A7, I5) | I5 `d7b1379`: `Dockerfile.jetson` usa `l4t-pytorch:r35.2.1` (JetPack 5; a placa é JetPack 6.2.1); broker do consumidor do P5 só pelo YAML (padrão da nuvem fixo); I5 com `float16` padrão (GPU); A7 escuta `ods.s5.event.metrics` (6c: `ods.s5.event_metrics`) |
+| VER-4 (A7, I5) | I5 `d7b1379` em CPU na build inf (P2 0.2.0a3 já traz Whisper: caminho para a GPU, a avaliar); `Dockerfile.jetson` usa `l4t-pytorch:r35.2.1` (JetPack 5; a placa é JetPack 6.2.1); broker do consumidor do P5 só pelo YAML (padrão da nuvem fixo); I5 com `float16` padrão (GPU); A7 escuta `ods.s5.event.metrics` (6c: `ods.s5.event_metrics`) |
 | SIS-2 (P5, P7) | Só scripts de hardware, sem Kafka: A6/A7 ficam sem P5 e A1/A4 sem P7 |
 
 ---

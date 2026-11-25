@@ -8,11 +8,12 @@
 #   - I1 (detecção, GPU) NÃO está aqui: é o orquestrador permanente de builds/i1, que atende
 #     todas as builds com um modelo por vez na GPU. Esta build pede detecções a ele por
 #     ods.i1.command (./inf.sh i1 <EQUIPE>) e consome ods.i1.detections (I2 e I9).
-#   - Contínuos (sobem com "up"): i2, i4-server + i4, i5, i6, i9.
-#   - Sob demanda (perfis; o inf.sh roda cada um): i3, i4-video, i5-audio, i7, i8.
+#   - Contínuos (sobem com "up"): i2, i4-server + i4, i6, i9. (I5 fora desde 24/11/2026)
+#   - Sob demanda (perfis; o inf.sh roda cada um): i3, i4-video, i7, i8.
 #   - Sem P4 nesta build: cada inferência lê arquivo (vídeo/áudio) ou o barramento. O I7 também lê
 #     o P4 (--p4) e o I1 lê o socket do P4 em /var/lib/ods/p4-shm, quando houver um P4 de pé.
-#   - Tudo em CPU, exceto o I1 (TensorRT, na build dele). O I5 da equipe para Jetson usa a base
+#   - GPU (TensorRT pelo P2): o I1 (na build dele) e o detector do I7 (mesma engine app-plates
+#     do I1, só leitura). O resto em CPU. O I5 da equipe para Jetson usa a base
 #     l4t-pytorch r35 (JetPack 5), que não roda no JetPack 6.2.1 da placa: aqui vai uma imagem
 #     do P3 em CPU (ods-i5-cpu), como no A7.
 #
@@ -137,61 +138,65 @@ services:
       - ./i4:/p3/i4:ro
       - ${I4_VIDEO:?defina I4_VIDEO}:/video/entrada.mp4:ro
 
-  # ================================================================ I5 · fala (VER-4)
-  i5:
-    # Modo de produção do I5 (scripts/1_principal_p5_kafka_p2.sh): consome ods.p5.audio_chunk,
-    # VAD, Whisper e publica ods.i5.transcript. Imagem do P3 em CPU (ver o cabeçalho).
-    # O broker do consumidor só vem do YAML: o P3 gera a config em /tmp a partir de ./i5,
-    # trocando __KAFKA_BROKER__ pelo da build.
-    build:
-      context: ${SRC_DIR}/i5
-      dockerfile_inline: |
-        FROM python:3.11-slim-bookworm
-        ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app HF_HOME=/cache/huggingface
-        RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
-            && rm -rf /var/lib/apt/lists/*
-        # torch só de CPU antes do resto, para o pip não trazer as bibliotecas CUDA
-        RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
-        WORKDIR /app
-        COPY requirements.txt .
-        RUN pip install --no-cache-dir -r requirements.txt
-        COPY src/ src/
-        COPY config/ config/
-        COPY data/ data/
-    image: ods-i5-cpu:${I5_REF:?fixe o commit do i5}
-    restart: unless-stopped
-    <<: *log
-    entrypoint: ["sh", "-c"]
-    command:
-      - >
-        sed "s|__KAFKA_BROKER__|$$KAFKA_BROKER|" /p3/i5/pipeline_config.yaml > /tmp/i5.yaml &&
-        if [ "$$I5_MODO" = wake-word ]; then set -- --wake-word --wake-words lexie; else set --; fi &&
-        exec python -u src/pipeline.py --config /tmp/i5.yaml --kafka --publish-kafka
-        --kafka-broker "$$KAFKA_BROKER" --kafka-topic ods.i5.transcript
-        --origem "$$I5_ORIGEM" --no-save-json "$$@"
-    environment:
-      KAFKA_BROKER: ${KAFKA_BROKER}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
-      KAFKA_TOPIC: ods.i5.transcript
-      I5_MODO: ${I5_MODO:-continuo}
-      I5_ORIGEM: ${I5_ORIGEM:-mic_balcao_1}
-    volumes:
-      - ./i5:/p3/i5:ro
-      - i5-cache:/cache
-    depends_on:
-      kafka-topicos: { condition: service_completed_successfully }
+  # ======================= I5 FORA DA BUILD (24/11/2026, decisão do usuário) =======================
+  # O usuário tem uma build própria do I5 na placa (imagem ods-i5-gpu); a imagem do P3 em CPU
+  # (ods-i5-cpu) saiu para liberar disco. Para voltar: descomente os serviços i5 e i5-audio abaixo
+  # e o volume i5-cache no fim, e reative as linhas marcadas "I5 fora" no inf.sh.
+  # # ================================================================ I5 · fala (VER-4)
+  # i5:
+  #   # Modo de produção do I5 (scripts/1_principal_p5_kafka_p2.sh): consome ods.p5.audio_chunk,
+  #   # VAD, Whisper e publica ods.i5.transcript. Imagem do P3 em CPU (ver o cabeçalho).
+  #   # O broker do consumidor só vem do YAML: o P3 gera a config em /tmp a partir de ./i5,
+  #   # trocando __KAFKA_BROKER__ pelo da build.
+  #   build:
+  #     context: ${SRC_DIR}/i5
+  #     dockerfile_inline: |
+  #       FROM python:3.11-slim-bookworm
+  #       ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/app HF_HOME=/cache/huggingface
+  #       RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 \
+  #           && rm -rf /var/lib/apt/lists/*
+  #       # torch só de CPU antes do resto, para o pip não trazer as bibliotecas CUDA
+  #       RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+  #       WORKDIR /app
+  #       COPY requirements.txt .
+  #       RUN pip install --no-cache-dir -r requirements.txt
+  #       COPY src/ src/
+  #       COPY config/ config/
+  #       COPY data/ data/
+  #   image: ods-i5-cpu:${I5_REF:?fixe o commit do i5}
+  #   restart: unless-stopped
+  #   <<: *log
+  #   entrypoint: ["sh", "-c"]
+  #   command:
+  #     - >
+  #       sed "s|__KAFKA_BROKER__|$$KAFKA_BROKER|" /p3/i5/pipeline_config.yaml > /tmp/i5.yaml &&
+  #       if [ "$$I5_MODO" = wake-word ]; then set -- --wake-word --wake-words lexie; else set --; fi &&
+  #       exec python -u src/pipeline.py --config /tmp/i5.yaml --kafka --publish-kafka
+  #       --kafka-broker "$$KAFKA_BROKER" --kafka-topic ods.i5.transcript
+  #       --origem "$$I5_ORIGEM" --no-save-json "$$@"
+  #   environment:
+  #     KAFKA_BROKER: ${KAFKA_BROKER}
+  #     KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+  #     KAFKA_TOPIC: ods.i5.transcript
+  #     I5_MODO: ${I5_MODO:-continuo}
+  #     I5_ORIGEM: ${I5_ORIGEM:-mic_balcao_1}
+  #   volumes:
+  #     - ./i5:/p3/i5:ro
+  #     - i5-cache:/cache
+  #   depends_on:
+  #     kafka-topicos: { condition: service_completed_successfully }
 
-  i5-audio:
-    # Faz o papel do P5: fatia I5_AUDIO em ods.p5.audio_chunk (mock_p5_producer.py do I5).
-    # Sob demanda: ./inf.sh i5
-    image: ods-i5-cpu:${I5_REF}
-    pull_policy: never
-    profiles: [i5]
-    restart: "no"
-    command: ["python", "-u", "src/mock_p5_producer.py", "--file", "/audios/${I5_AUDIO:-audio4.ogg}",
-              "--broker", "${KAFKA_BROKER}", "--topic", "ods.p5.audio_chunk"]
-    volumes:
-      - ${I5_AUDIO_DIR:?defina I5_AUDIO_DIR}:/audios:ro
+  # i5-audio:
+  #   # Faz o papel do P5: fatia I5_AUDIO em ods.p5.audio_chunk (mock_p5_producer.py do I5).
+  #   # Sob demanda: ./inf.sh i5
+  #   image: ods-i5-cpu:${I5_REF}
+  #   pull_policy: never
+  #   profiles: [i5]
+  #   restart: "no"
+  #   command: ["python", "-u", "src/mock_p5_producer.py", "--file", "/audios/${I5_AUDIO:-audio4.ogg}",
+  #             "--broker", "${KAFKA_BROKER}", "--topic", "ods.p5.audio_chunk"]
+  #   volumes:
+  #     - ${I5_AUDIO_DIR:?defina I5_AUDIO_DIR}:/audios:ro
 
   # ================================================================ I6 · QR (VER-2)
   i6:
@@ -230,22 +235,59 @@ services:
   # ================================================================ I7 · placas (VER-5)
   i7:
     # Lê VIDEO_DIR/I7_VIDEO (--video, 2 quadros/s do vídeo) e publica ods.i7.plate_read.
-    # Detector pelo P2 (engine de CPU compilada na imagem), configuração recomendada pela
-    # equipe no .env.example. Sob demanda: ./inf.sh i7
-    build: ${SRC_DIR}/i7
-    image: ods-i7:${I7_REF:?fixe o commit do i7}
+    # Configuração recomendada pela equipe no .env.example. Sob demanda: ./inf.sh i7
+    #
+    # GPU (P3, 24/11/2026): o detector do I7 é o pacote app-plates 1.0.0 do B5, o MESMO ONNX
+    # (sha256 b698a519…) que o I1 já roda em TensorRT. Em vez do Dockerfile da equipe (P2 0.1.0
+    # --cpu-only, com PyTorch e ultralytics, que o DETECTOR=p2 não importa), esta imagem do P3:
+    #   - parte da mesma base TensorRT do I1 (camadas divididas com o ods-i1-gpu no disco);
+    #   - instala o P2 0.2.0a1 [trt], o mesmo do I1 (a API usada pelo detector_p2.py não mudou);
+    #   - lê a engine FP16 que o builds/i1 já compilou em ENGINES_DIR/app-plates-1.0.0 (só leitura);
+    #   - deixa o OCR (fast-alpr, ONNX Runtime) em CPU.
+    # numpy < 2 por causa do P2 (o OCR aceita os dois). Desfazer: voltar a "build: ${SRC_DIR}/i7"
+    # com a imagem ods-i7 e tirar runtime/volume da engine.
+    build:
+      context: ${SRC_DIR}/i7
+      dockerfile_inline: |
+        ARG BASE_IMAGE
+        FROM $${BASE_IMAGE}
+        ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+            CUDA_HOME=/usr/local/cuda PATH=/usr/local/cuda/bin:$${PATH} \
+            LD_LIBRARY_PATH=/usr/local/cuda/lib64:$${LD_LIBRARY_PATH} \
+            PYTHONPATH=/usr/lib/python3/dist-packages:/usr/lib/python3.10/dist-packages \
+            P2_BACKEND=trt P2_ENGINE_DIR=/opt/ods/engines
+        # GStreamer com Python (gi) só para o --p4 (leitura do socket do P4), como no I1
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+                python3-pip libglib2.0-0 \
+                python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-bad \
+            && rm -rf /var/lib/apt/lists/*
+        # Python 3.10 da base: opencv 4.12+ exige numpy 2 (o P2 pede < 2) e o onnxruntime depois do
+        # 1.23.2 não tem roda cp310 aarch64. Fixados para o pip não procurar versão por tentativa.
+        RUN python3 -m pip install --upgrade pip && python3 -m pip install \
+                "numpy>=1.21.6,<2" "opencv-python-headless==4.11.0.86" "onnxruntime==1.23.2" \
+                "fast-alpr[onnx]==0.4.0" \
+                "python-dotenv>=1.0" "confluent-kafka>=2.3" "typing_extensions>=4.10" \
+                "p2[trt] @ https://github.com/ods-26-2/p2/releases/download/v0.2.0a1/p2-0.2.0a1-py3-none-any.whl"
+        WORKDIR /app
+        COPY scripts/ scripts/
+      args:
+        BASE_IMAGE: ${TRT_BASE_IMAGE:?defina TRT_BASE_IMAGE}
+    image: ods-i7-gpu:${I7_REF:?fixe o commit do i7}
     profiles: [i7]
     restart: "no"
+    runtime: nvidia
     entrypoint: ["sh", "-c"]
     command:
       - >
         if [ "$$I7_QUADROS" -gt 0 ] 2>/dev/null; then set -- -n "$$I7_QUADROS"; else set --; fi &&
-        exec python "scripts/aplicacaoModelov5-fast+rodosol.py" --video "/videos/$$I7_VIDEO" "$$@"
+        exec python3 "scripts/aplicacaoModelov5-fast+rodosol.py" --video "/videos/$$I7_VIDEO" "$$@"
     environment:
       I7_VIDEO: ${I7_VIDEO:-cam0.mp4}
       I7_QUADROS: ${I7_QUADROS:-20}
       DETECTOR: p2
       P2_ENGINE_REF: app-plates-1.0.0
+      # trt: sem TensorRT o P2 falha em vez de cair para CPU em silêncio
+      P2_BACKEND: trt
       NMS_ENTRE_CLASSES: sim
       OCR_MODELO: cct-s-v2-global-model
       PREPROCESSAMENTO: sim
@@ -262,6 +304,7 @@ services:
       SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
     volumes:
       - ${VIDEO_DIR}:/videos:ro
+      - ${ENGINES_DIR:?defina ENGINES_DIR}/app-plates-1.0.0:/opt/ods/engines/app-plates-1.0.0:ro
       - i7-saidas:/saidas
       - i7-cache:/root/.cache
 
@@ -317,6 +360,6 @@ services:
 
 volumes:
   i3-registro:
-  i5-cache:
+  # i5-cache:   (I5 fora da build)
   i7-saidas:
   i7-cache:
