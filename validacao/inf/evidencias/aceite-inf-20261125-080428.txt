@@ -1,0 +1,40 @@
+Teste de aceitação da build inf — 2026-11-25 08:05:55 — ods-pc
+Kafka: 172.18.4.56:9093 · I1: VER3, 150 quadros · memória disponível: 3583 MB → 3481 MB
+
+T-I1   PASSOU  I1 detecções (VER3)              150 mensagens
+T-I1M  PASSOU  I1 sem reinício nem OUT_OF_MEMORY RestartCount 1
+T-I2   PASSOU  I2 trilhas                         150 mensagens
+T-I3   PASSOU  I3 calibração anunciada          artifact.published +1, calibration +1
+T-I4   PASSOU  I4 sinais                          sign +1, keypoints +0, facial_marker +0
+T-I5   AVISO   I5 transcrição                   I5 fora da build inf (comentado no docker-compose.yml)
+T-I6   PASSOU  I6 QR                              14 leituras de inf-qr.mp4
+T-I7   PASSOU  I7 placas (GPU)                    4 leituras em 20 quadros de cam0.mp4 (app-plates-1.0.0-fp16+cct-s-v2-global)
+T-I8   PASSOU  I8 eventos de exemplo              +4
+T-I9   PASSOU  I9 conformidade de EPI             150 mensagens
+
+Mensagens por tópico (antes → depois):
+  ods.artifact.published                        3 →        4
+  ods.i1.command                               47 →       48
+  ods.i1.detections                          2493 →     2643
+  ods.i2.tracks                              1340 →     1490
+  ods.i3.calibration                            1 →        2
+  ods.i4.facial_marker                          0 →        0
+  ods.i4.keypoints                              0 →        0
+  ods.i4.lexicon_capture.command                0 →        0
+  ods.i4.lexicon_capture.reply                  0 →        0
+  ods.i4.sign                                   1 →        2
+  ods.i5.transcript                            76 →       76
+  ods.i6.code_read                           6548 →     6562
+  ods.i7.plate_read                           349 →      353
+  ods.i9.dlq                                    0 →        0
+  ods.i9.ppe_compliance                       499 →      649
+  ods.industria.defeito_classificado            4 →        8
+  ods.p5.audio_chunk                         6459 →     6459
+
+Resumo: PASSOU 9, FALHOU 0, AVISO 1
+
+Nota do P3: 2º ./inf.sh testar completo na Jetson (Kafka da placa). Entre os dois, o I7 rodou sozinho
+(./inf.sh i7, 11:01 UTC-ish) e baixou o OCR para o volume i7-cache. A queda do 1º teste (código 139,
+antes de baixar o OCR) não se repetiu; a causa ficou sem confirmação (o dmesg das 11h não tinha registro de segfault nem NvMap).
+Observação: o I4 publicou o sinal (ods.i4.sign) sem nenhuma mensagem em ods.i4.keypoints nem
+ods.i4.facial_marker.

@@ -2,10 +2,11 @@
 
 Guia de execução e de teste da build `builds/inf` (P3 · SIS-1). Montada em 24/11/2026.
 
-**Estado:** validada só fora da placa (`docker compose config` com os clones reais, `bash -n`,
+**Estado (25/11/2026):** `./inf.sh testar` na Jetson com o Kafka da placa: PASSOU 9, FALHOU 0, AVISO 1
+(T-I5, I5 fora da build) — `evidencias/aceite-inf-20261125-080428.txt`. Antes, validada fora da placa (`docker compose config` com os clones reais, `bash -n`,
 `shellcheck` e os scripts contra um `docker` simulado, nos caminhos de sucesso e de falha).
-**Nenhuma imagem desta build foi construída na Jetson ainda**, exceto as que ela divide com as
-aplicações (`ods-i2`, `ods-i6`, `ods-i9`, se o A8, o A2 e o A5 já as construíram).
+Todas as imagens da build foram construídas na Jetson (24/11/2026). **Ainda não testada com o Kafka da
+nuvem** (desligado em 23/11 e 25/11).
 
 ## 1. O que sobe
 
@@ -61,8 +62,8 @@ cd /opt/ods/p3/builds/inf
 ./inf.sh testar       # → resultados/aceite-inf-<data>.txt
 ```
 
-O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, roda I3, I8, I5
-(áudio), I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo.
+O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, roda I3, I8,
+I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo (o I5 está fora da build).
 
 ### Resultado esperado
 

@@ -1,0 +1,38 @@
+Teste de aceitação da build inf — 2026-11-25 07:27:57 — ods-pc
+Kafka: 172.18.4.56:9093 · I1: VER3, 150 quadros · memória disponível: 3824 MB → 3580 MB
+
+T-I1   PASSOU  I1 detecções (VER3)              150 mensagens
+T-I1M  PASSOU  I1 sem reinício nem OUT_OF_MEMORY RestartCount 1
+T-I2   PASSOU  I2 trilhas                         150 mensagens
+T-I3   PASSOU  I3 calibração anunciada          artifact.published +1, calibration +1
+T-I4   PASSOU  I4 sinais                          sign +1, keypoints +0, facial_marker +0
+T-I5   AVISO   I5 transcrição                   I5 fora da build inf (comentado no docker-compose.yml)
+T-I6   PASSOU  I6 QR                              28 leituras de inf-qr.mp4
+T-I7   FALHOU  I7 placas (GPU)                    terminou com código 139
+T-I8   PASSOU  I8 eventos de exemplo              +4
+T-I9   PASSOU  I9 conformidade de EPI             150 mensagens
+
+Mensagens por tópico (antes → depois):
+  ods.artifact.published                        2 →        3
+  ods.i1.command                               46 →       47
+  ods.i1.detections                          2343 →     2493
+  ods.i2.tracks                              1190 →     1340
+  ods.i3.calibration                            0 →        1
+  ods.i4.facial_marker                          0 →        0
+  ods.i4.keypoints                              0 →        0
+  ods.i4.lexicon_capture.command                0 →        0
+  ods.i4.lexicon_capture.reply                  0 →        0
+  ods.i4.sign                                   0 →        1
+  ods.i5.transcript                            76 →       76
+  ods.i6.code_read                           6121 →     6149
+  ods.i7.plate_read                           341 →      341
+  ods.i9.dlq                                    0 →        0
+  ods.i9.ppe_compliance                       349 →      499
+  ods.industria.defeito_classificado            0 →        4
+  ods.p5.audio_chunk                         6459 →     6459
+
+Resumo: PASSOU 8, FALHOU 1, AVISO 1
+
+Nota do P3: 1º ./inf.sh testar completo na Jetson (Kafka da placa), depois da correção do stdin (9153d5c).
+Código 139 do I7 = 128 + 11 (SIGSEGV): o processo do I7 caiu com falha de segmentação na imagem
+ods-i7-gpu (P3). A diagnosticar.
