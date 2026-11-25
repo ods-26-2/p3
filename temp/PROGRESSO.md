@@ -463,3 +463,9 @@
 - Placa: remover ods-i5-cpu (não usada), ods-i5:d7b1379 e ods-aceite-i5:1 (mais antigas); manter ods-i5-gpu.
 - Confirmado pelo usuário: das imagens de I5 fica só a ods-i5-gpu:d7b1379 (saem ods-i5-cpu, ods-i5:d7b1379 e ods-aceite-i5:1).
 - Commit pedido pelo usuário (I7 GPU + I5 fora).
+
+### 2026-11-24 — pedido: script que roda as suítes das equipes nas imagens da inf (validacao/inf/testar-inf-repos.sh)
+- Feito: validacao/inf/testar-inf-repos.sh (R-I1 via testar-i1-servico.sh; R-I2/R-I3 testes já na imagem, I3 com dados/ por volume; R-I4 tests/ por volume + pytest instalado na hora; R-I8 CMD da imagem do publicador; R-I9 tests/ por volume; I6/I7 sem suíte = AVISO). Imagens lidas do docker compose config da inf; --network none (menos I4). Relatório em validacao/inf/resultados/.
+- Validado: bash -n, shellcheck, simulação com docker falso (unittest e pytest, sucesso e falha; extração dos testes com problema corrigida). I9 local: 130 testes OK (Python 3.10). GUIA seção 4.
+- Próximo: commit; na placa: ./testar-inf-repos.sh (depois do ./inf.sh subir).
+- Commit do testar-inf-repos.sh pedido pelo usuário.

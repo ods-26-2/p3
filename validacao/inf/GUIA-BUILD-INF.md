@@ -87,7 +87,32 @@ alias dc='docker compose --env-file inf.env $( [ -f inf.local.env ] && echo --en
 dc logs --tail 30 i5
 ```
 
-## 4. Riscos conhecidos (primeira construção na placa)
+## 4. Suítes de teste das equipes nas imagens da build
+
+O `./inf.sh testar` confere o Kafka. As suítes dos repositórios rodam à parte, dentro das imagens
+exatas da build (lidas do `docker compose config`), sem alterar imagem nem código:
+
+```bash
+cd /opt/ods/p3/validacao/inf
+./testar-inf-repos.sh              # todos (o I1 pelo validacao/i1/testar-i1-servico.sh, na GPU)
+./testar-inf-repos.sh --sem-i1     # sem o I1
+./testar-inf-repos.sh i2 i9        # só alguns
+```
+
+| Item | Suíte | Como roda | Esperado |
+|---|---|---|---|
+| R-I1 | `I1/tests` + CMD da imagem | `validacao/i1/testar-i1-servico.sh` (build `i1`) | PASSOU (45 de 46; o `test_05` precisa do `ultralytics`) |
+| R-I2 | `I2/tests` (unittest) | já na imagem `ods-i2` | PASSOU (o CI da equipe roda a mesma suíte) |
+| R-I3 | `I3/tests` (unittest) | já na imagem; `dados/` do clone por volume | PASSOU (idem) |
+| R-I4 | `tests/` (pytest) | do clone por volume; `pytest` instalado no container (precisa de rede) | a conferir: sem CI na equipe |
+| R-I6, R-I7 | — | o repositório não tem suíte | AVISO |
+| R-I8 | contrato e publicador (pytest) | comando padrão da imagem `ods-i8-publisher` | PASSOU (o CI da equipe roda a mesma suíte) |
+| R-I9 | `I9/tests` (unittest) | do clone por volume | PASSOU (130 testes OK fora da placa, Python 3.10, 24/11/2026) |
+
+Todas rodam com `--network none` (nada vai para o Kafka), menos a do I4. Relatório em
+`validacao/inf/resultados/inf-repos-<data>.txt`; copie para `evidencias/` o que for evidência.
+
+## 5. Riscos conhecidos (primeira construção na placa)
 
 - **I4:** `requirements-i4.txt` pede `mediapipe>=0.10.14` sem teto; a versão mais nova no PyPI (1.2.3)
   tem roda para aarch64, mas não foi testada com o código do I4. O servidor C++ compila o Crow e o
@@ -99,7 +124,7 @@ dc logs --tail 30 i5
 - **I3:** Python 3.14 e `opencv-python-headless` 5.0 (há roda aarch64 no PyPI).
 - **I6:** o vídeo de QR é um exemplo do P3, não da VER-2.
 
-## 5. Remover
+## 6. Remover
 
 ```bash
 ./limpar.sh               # containers (volumes ficam)
