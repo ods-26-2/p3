@@ -161,13 +161,21 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - Vídeos das equipes versionados em `assets/` (`VER1.mp4` 4K, `INV1.mp4`, `epi.mp4`); `./i1.sh videos` (também no `subir`) copia para `VIDEO_DIR` e cria os links `<SQUAD>.mp4` de `I1_VIDEOS`. O `cam0.mp4` (VER5) já está na placa.
 - A8 e A5 passaram para o I1 `3b2a9cc` (23/11, só `I1_REF`; não testados com ele).
 
-### Build "inf": todas as inferências (24/11/2026; validada só fora da Jetson)
+### Build "inf": todas as inferências (24/11/2026; validada na Jetson em 25/11 com o Kafka da placa)
 
 - `builds/inf/` (projeto `ods-inf`): **sem `i1` próprio**; pede ao I1 de `builds/i1` por `ods.i1.command` (`./inf.sh i1 [EQUIPE] [QUADROS]`) e recusa subir se o broker do container do I1 for outro. Entra no `./ods.sh trocar inf` como as apps.
 - Contínuos: `i2`, `i4-server` + `i4` (Libras ao vivo; servidor websocket 18080 em `127.0.0.1`), `i5` **fora desde 24/11** (comentado no compose a pedido do usuário, que tem build própria do I5 na placa; a imagem `ods-i5-cpu` sai), `i6` (vídeo de QR gerado pelo P3 em `VIDEO_DIR/inf-qr.mp4`), `i9`. Sob demanda: `i3` (quadra do A4, `--registro` em volume), `i4-video`, `i5-audio`, `i7` (`--video`; **detector na GPU** desde 24/11: imagem do P3 `ods-i7-gpu` na base `l4t-tensorrt` do I1, P2 0.2.0a1 [trt], lê a engine `app-plates-1.0.0` do I1 — mesmo ONNX, sha256 `b698a519…`; OCR em CPU; T-I7 exige `artifact_version` `-fp16`), `i8` (mocks 2.0).
 - Commits mais novos que os das apps: I3 `c3d876e`, I4 `503f64b`, I5 `d7b1379`, I7 `1441bbb`. Script do I8 movido para `builds/comum/i8` (o A1 também usa).
 - `./inf.sh testar`: contagem por tópico antes/depois dos disparos (T-I1…T-I9 + T-I1M memória do I1). Guia: `validacao/inf/GUIA-BUILD-INF.md`.
-- Validado: `docker compose config` (v2.32.4) com os clones reais, `bash -n`, `shellcheck`, `subir`/`testar`/`status`/`limpar` contra `docker` simulado. **Falta construir e rodar na Jetson** (I4, I5 e I7 nunca construídos em ARM64 nesta versão).
+- **Jetson, 25/11/2026 (Kafka da placa):** `./inf.sh testar` PASSOU 9, FALHOU 0, AVISO 1 (T-I5, fora) — `validacao/inf/evidencias/aceite-inf-20261125-080428.txt`. I7 na GPU (`-fp16`, 4 placas). No 1º teste o I7 caiu uma vez com código 139 (SIGSEGV) antes de baixar o OCR; não se repetiu (causa não confirmada). Suítes das equipes nas imagens (`validacao/inf/testar-inf-repos.sh`): I1 45/46, I2 35, I3 33, I8 139, I9 130 OK; I4 74/77 (`pyarrow` × numpy). Imagem `ods-i7-gpu`: 1,86 GB. Disco depois: ~6 GB livres.
+- Lições: `docker compose run -T` deixa o stdin ligado ao terminal sem ser TTY (o I3 com `--linhas` travou lendo): disparos com `< /dev/null`. O `.dockerignore` do I2 e do I3 tira os testes da imagem. Kafka da nuvem desligado em 25/11 (recusa imediata da placa e do notebook): troca descrita no guia, quando a TRA-1 ligar.
+
+### Build "inf_restrita": só I1, I2 e I3 (25/11/2026; ainda não rodada na Jetson)
+
+- `builds/inf_restrita/` (projeto `ods-inf_restrita`): **I1 próprio** (orquestrador, mesma imagem `ods-i1-gpu:<I1_REF>` do `builds/i1`, grupo `ods-i1-inf-restrita`) + `i2` contínuos; `i3` sob demanda. Commits = HEAD de cada repo em 25/11 (I1 develop `3b2a9cc`, I2 `5283d60`, I3 `c3d876e`).
+- **Kafka sempre o da placa** (`172.18.4.56:9093`, no `.env`), a pedido do usuário: as apps e o I1 permanente vão para a nuvem. Recusa subir/testar se o I1 permanente estiver de pé no mesmo broker (dois orquestradores na GPU).
+- Testes: `./inf_restrita.sh testar` (T-I1/T-I1S/T-I1G/T-I1M/T-I2/T-I3 por `source_id` do teste + T-C1–T-C4: contrato com o schema do próprio repositório, dentro da imagem dele, `contrato/validar.py`) e `./inf_restrita.sh repos` (= `validacao/inf/testar-inf-repos.sh --build inf_restrita`; o `testar-i1-servico.sh` aceita `--build inf_restrita`). Guia: `validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md`.
+- Dependências (6c): P2 (wheel 0.2.0a1 na imagem do I1; existe 0.2.0a3), B5 (pacotes na develop do I1, mais novos que a `main` do B5), P4 opcional.
 
 **Tags no p3:** `a8-minimo-v1` (A8 + I7). A cadeia foi validada em 12/11/2026; a tag `a8-cadeia-v1` foi proposta e precisa ser conferida com o usuário.
 

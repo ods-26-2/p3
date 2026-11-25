@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: build "inf" (todas as inferências I1–I9; uma pasta, uma seção do compose por I; I1 = builds/i1)
-- Fase: build na Jetson parou por disco cheio na última imagem (I7); I7 trocado para GPU (ods-i7-gpu), validado só fora da placa
-- Último resultado: todas as imagens da inf na placa menos a do I7; simulação do T-I7 GPU ok
-- Próximo passo: na placa ./inf.sh status e ./inf.sh testar (todas as imagens da inf existem, inclusive ods-i7-gpu; suítes das equipes já rodadas: 5 PASSOU, I4 pyarrow, I6/I7 sem suíte)
-- Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (TRA-1) desligado; imagens ods-i5* d7b1379 de quem?; dica "../ods.sh trocar" da lib para build permanente; A2 segue sem commit
+- Aplicação em foco: build "inf_restrita" (só I1, I2, I3; I1 próprio; Kafka da placa fixo)
+- Fase: escrita e validada fora da placa (25/11/2026); falta rodar na Jetson
+- Último resultado: compose config OK (clones reais), shellcheck OK, simulação testar (sucesso 10/0; I2 inválido + fp32 → T-C2/T-I1G FALHOU; I1 mudo + I3 falha → 7 FALHOU), trava do I1 permanente no mesmo broker OK; validar.py contra exemplos dos repos OK; I2 35 OK e I3 33 OK no notebook
+- Próximo passo: commit (aguarda usuário); na placa: git pull; ../i1/i1.sh parar OU rm ../i1/i1.local.env (o permanente hoje está no Kafka da placa); ./inf_restrita.sh; ./inf_restrita.sh testar; ./inf_restrita.sh repos
+- Bloqueios / perguntas abertas ao usuário: confirmar I1 próprio x usar o permanente; o permanente está no Kafka da placa (i1.local.env) e conflita
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -486,3 +486,43 @@
 - Correção: rodar() com < /dev/null (todos os disparos). shellcheck ok. Simulação não pegava (docker falso não lê stdin).
 - Na placa: docker rm -f ods-inf-i3-run-117239d82196; depois do commit/pull, ./inf.sh testar de novo.
 - Commit pedido pelo usuário (rodar com < /dev/null + evidência/guia da 2ª execução das suítes).
+
+### 2026-11-25 10:31 — Jetson: Kafka da nuvem (34.66.235.91:9093) de dentro da rede ods-inf_default
+- kafka-broker-api-versions: "Bootstrap broker ... disconnected"; kafka-topics --list: "Connection to node -1 could not be established" em laço. Mesmo quadro de 23/11. Causa a distinguir: broker desligado (recusa), firewall (tempo esgotado) ou listener com TLS/SASL (porta abre e o broker derruba).
+- Mantém o Kafka da placa (i1.local.env / inf.local.env). Pedido ao usuário: teste TCP puro da placa e do notebook; perguntar à TRA-1 se o broker está ligado e como é o listener.
+- Notebook do usuário (25/11): /dev/tcp 34.66.235.91:9093 → Connection refused (RST imediato: a máquina responde e nada escuta na porta; firewall do GCP costuma descartar em silêncio). Conclusão provável: broker da nuvem desligado. Troca só depois de a TRA-1 ligar.
+
+### 2026-11-25 07:25 — Jetson: 1º ./inf.sh testar completo (Kafka da placa)
+- PASSOU 8 (I1, I1M, I2, I3, I4 sign+1, I6 28, I8 +4, I9 150), AVISO 1 (I5 fora), FALHOU 1: T-I7 código 139 = SIGSEGV na imagem ods-i7-gpu (P3).
+- Evidência: validacao/inf/evidencias/aceite-inf-20261125-072508.txt.
+- Próximo: diagnosticar o segfault do I7 (import cv2/numpy, p2.load da engine, fast_alpr, script completo com saída).
+- Diagnóstico I7 (Jetson, 25/11 11:01): numpy 1.26.4 / cv2 4.11.0 ok; p2.load → app-plates-1.0.0-fp16 (TensorRT na GPU) ok; fast_alpr ok (aviso inofensivo do onnxruntime "GPU device discovery failed"); I7 completo: 20 quadros, 20 com placa (OVK7900, ODI9001, ODA4357, PPY1001), 4 eventos entregues em ods.i7.plate_read, versão -fp16. O OCR foi baixado nesta execução (cache vazio) → no testar o I7 caiu ANTES de baixar o OCR e de publicar (plate_read 341→341). Falha intermitente/de contexto. Pedido: código de saída desta execução, dmesg (segfault/NvMap) da hora do testar, repetir ./inf.sh i7 e ./inf.sh testar.
+
+### 2026-11-25 08:05 — Jetson: 2º ./inf.sh testar: PASSOU 9, FALHOU 0, AVISO 1 (T-I5)
+- I7 na GPU: 4 leituras (-fp16). A queda 139 do 1º teste não se repetiu (OCR já no cache; dmesg sem registro).
+- Observação: I4 publica sign sem keypoints/facial_marker.
+- Evidência: validacao/inf/evidencias/aceite-inf-20261125-080428.txt. CLAUDE.md (seção inf) e GUIA atualizados. Sem commit.
+- Próximo: commit; propor tag inf-v1 (CLAUDE §7.7); troca para o Kafka da nuvem quando a TRA-1 ligar.
+- Jetson 25/11 (11:10 nos logs do container): ./inf.sh i7 sozinho → código 0, 4 eventos, OCR do cache (sem download). O dmesg não rodou (erro de sintaxe na colagem: comentário junto do comando).
+- dmesg (segfault|nvmap) vazio: nenhum registro do kernel. Queda 139 do 1º teste fica como ocorrência única sem causa (o anel do dmesg pode ter girado; se voltar, coletar dmesg e docker logs na hora).
+
+### 2026-11-25 — Balanço "está tudo de pé?"
+- Feito: GUIA-BUILD-INF.md corrigido (linha "nenhuma imagem construída na Jetson" estava velha; testar sem I5).
+- Resultado: inf validada só com o Kafka da placa; nuvem, I5, A1–A7 na placa e keypoints do I4 seguem em aberto.
+- Próximo: commit das evidências/docs + tag inf-v1 (aguarda o usuário).
+
+### 2026-11-25 — A8 reconstruída na placa (~2 h) e imagens salvas no PC
+- Feito: `./ods.sh trocar a8` levou quase 2 h (build do zero). As 11 imagens da A8 (sem cp-kafka e ods-i1-gpu)
+  foram salvas no PC do usuário por `ssh … docker save | zstd`: ~/ods-imagens/a8-20261125.tar.zst (2,2 GB),
+  lista + a8.env em a8-20261125.lista.txt. Conferido: tar íntegro, 11 tags no manifest.json = lista.
+- Restaurar: `zstd -dc … | ssh ods@172.18.4.56 'docker load'` (≈2,4 GB na placa) e `./a8.sh`.
+- Próximo: resultado do ./a8.sh testar (não informado); oferta de `ods.sh guardar/restaurar <app>`.
+
+### 2026-11-25 — pedido: build "inf_restrita" (I1, I2, I3), conteúdo mais novo, Kafka local sempre
+- Levantamento (ls-remote/clones no scratchpad): I1 develop 3b2a9cc (20/11, mais nova que todas as feat/*), I2 main 5283d60, I3 main c3d876e: iguais aos da inf/i1.
+- Arquitetura: I1 <- P2 (wheel 0.2.0a1 no Dockerfile.jetson), B5 (pacotes em I1/artifacts; B5 main 04/11 só tem app-plates/app-epi, mesmo sha do plates), P4 (opcional: SHM; o orquestrador lê vídeo). I2 <- ods.i1.detections. I3 <- dados/ do clone; publica calibration + artifact.published. B4 só para validação.
+- Decisão (minha, a confirmar): I1 PRÓPRIO na build (mesma imagem ods-i1-gpu:<I1_REF> do builds/i1, não reconstrói), KAFKA_BROKER=172.18.4.56:9093 no .env (o builds/i1 fica para a nuvem). Se o I1 permanente estiver no MESMO broker, a subida recusa (dois orquestradores na GPU).
+- Ambiente local: python3 do asdf sem versão nesta pasta; usar /usr/bin/python3.
+- Feito: builds/inf_restrita/{docker-compose.yml, inf_restrita.env, inf_restrita.sh, limpar.sh, preparar-codigo.sh, contrato/validar.py}; validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md; testar-inf-repos.sh ganhou --build inf|inf_restrita (resultados em validacao/<build>/resultados); testar-i1-servico.sh aceita --build inf_restrita (e lê <build>.local.env); ods.sh lista inf_restrita; builds/README.md e CLAUDE.md §5.
+- Validação local: docker-compose v2.32.4 e shellcheck 0.10.0 copiados do scratchpad de 24/11 para o desta sessão. Defeito achado e corrigido antes da simulação: contrato() com pipefail somava uma 2ª linha "CONTRATO 0 0" quando o validador saía com 1.
+- Simulação (docker falso em scratchpad/sim): testar sucesso PASSOU 10; I2 inválido + I1 fp32 → T-C2 e T-I1G FALHOU; I1 sem resposta + I3 código 2 → 7 FALHOU após 5 min; subir encadeia (videos via ../i1/i1.sh videos, engines, "Aguardando comandos"); repos chama testar-i1-servico.sh --build inf_restrita; repos i4 recusado; inf padrão inalterada.

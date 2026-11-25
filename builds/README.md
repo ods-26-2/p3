@@ -53,6 +53,15 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 Sem `i1` próprio: o I1 é o de `i1/` (tem de estar de pé e no mesmo Kafka; o `inf.sh` confere). Entra no
 `./ods.sh trocar inf` como as aplicações. GPU: o I1 e o detector do I7 (mesma engine `app-plates` do I1); o resto em CPU.
 
+## Build restrita: só I1, I2 e I3
+
+| Build | Sobe por padrão | Sob demanda | Testes | Guia |
+|---|---|---|---|---|
+| `inf_restrita/` | `i1` (orquestrador **próprio**, GPU) + `i2` | `./inf_restrita.sh i1 [EQUIPE] [QUADROS]` · `i3` (calibração da quadra do A4) | `./inf_restrita.sh testar` (cadeia I1 → I2, I3 e contrato com o schema de cada repositório) · `./inf_restrita.sh repos` (suítes das equipes nas imagens) | [`validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md`](../validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md) |
+
+Kafka **sempre o da placa** (`172.18.4.56:9093`), mesmo com as aplicações e o I1 permanente na nuvem. A imagem do I1 é a
+mesma do `i1/` (`ods-i1-gpu:<I1_REF>`): não reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
+
 ## Estrutura comum
 
 - `comum/lib.sh`: funções de subir/status/parar/limpar usadas pelos `<app>.sh` e `limpar.sh`.

@@ -1,0 +1,148 @@
+# ODS — build "inf_restrita": só as inferências I1, I2 e I3 (P3 / SIS-1).
+#
+#   cd builds/inf_restrita && ./inf_restrita.sh     (confere a placa, baixa o código, constrói o que falta)
+#
+# Variáveis em inf_restrita.env (commits fixados, Kafka, entradas). Sem segredos.
+#
+# Desenho (25/11/2026):
+#   - Kafka SEMPRE o da placa (172.18.4.56:9093, listener PRIVATE do container "kafka" da turma).
+#     As aplicações e o I1 permanente (builds/i1) usam o Kafka da nuvem; esta build fica local.
+#   - I1 PRÓPRIO (o I1 permanente estará na nuvem): o mesmo orquestrador da develop do I1, na
+#     mesma imagem ods-i1-gpu:<I1_REF> do builds/i1 (não reconstrói se ela já existe), com grupo
+#     de consumo próprio. Dois orquestradores no MESMO broker disputariam a GPU e os pedidos: o
+#     inf_restrita.sh recusa subir se o I1 permanente estiver no mesmo Kafka.
+#   - Contínuos (sobem com "up"): i1 (espera pedidos em ods.i1.command) e i2.
+#   - Sob demanda: i3 (./inf_restrita.sh i3) e i1-engine (no "subir").
+#   - Testes: ./inf_restrita.sh testar (cadeia + contrato com o schema de cada repositório) e
+#     ./inf_restrita.sh repos (suítes de teste das equipes nas imagens desta build).
+#
+# Dependências pela 6c (lidas nos repositórios em 25/11/2026):
+#   I1  ← P2 (biblioteca, wheel 0.2.0a1 dentro da imagem), B5 (pacotes de modelo, que vêm na
+#         própria develop do I1 em I1/artifacts), P4 (opcional: quadros por memória compartilhada;
+#         sem P4 o orquestrador lê VIDEO_DIR/<EQUIPE>.mp4).
+#   I2  ← ods.i1.detections (do I1 desta build).
+#   I3  ← imagem/linhas do chão (dados/ do próprio repositório; calibração da quadra do A4).
+#
+# Tópicos (Kafka da placa):
+#   i1  ods.i1.command -> ods.i1.detections
+#   i2  ods.i1.detections -> ods.i2.tracks
+#   i3  (linhas da quadra) -> ods.i3.calibration + ods.artifact.published
+name: ods-inf_restrita
+
+x-log: &log
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+
+  kafka-topicos:
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da placa. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for t in ${I1_COMMAND_TOPIC:-ods.i1.command} ods.i1.detections ods.i2.tracks
+        ods.i3.calibration ods.artifact.published; do
+        kafka-topics --bootstrap-server ${KAFKA_BROKER:?defina KAFKA_BROKER} --create --if-not-exists
+        --topic $$t --partitions 1 --replication-factor 1 || exit 1; done
+
+  # ================================================================ I1 · detecção (MOD-1)
+  i1-engine:
+    # One-shot · P3 (o mesmo do builds/i1). Garante a engine TensorRT FP16 de cada pacote em
+    # I1_ENGINES_DIR: se já existe e carrega, segue em segundos; senão compila (~7 min por pacote).
+    image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
+    pull_policy: never
+    profiles: [engine]
+    restart: "no"
+    runtime: nvidia
+    environment:
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+      I1_PACOTES: ${I1_PACOTES:?defina I1_PACOTES}
+    volumes:
+      - ${I1_ENGINES_DIR:?defina I1_ENGINES_DIR}:/opt/ods/engines
+      - ../comum/i1/preparar-engine.sh:/p3/preparar-engine.sh:ro
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        for p in $$I1_PACOTES; do sh /p3/preparar-engine.sh /app/I1/artifacts/$$p FP16 || exit 1; done
+
+  i1:
+    # Orquestrador FIFO do I1 (I1/run_orchestrator.py) na GPU, TensorRT via P2. Receita do
+    # builds/i1 (validada na Jetson em 24/11/2026).
+    # CONTORNO DO P3: base l4t-tensorrt runtime pelo ARG BASE_IMAGE do Dockerfile.jetson (a padrão,
+    # l4t-jetpack, gerou uma imagem de 16,5 GB). Para desfazer: tire o "args".
+    # O padrão do orquestrador é o Kafka da nuvem (DEFAULT_CLOUD_BROKER): ODS_KAFKA_BROKER o troca
+    # pelo da placa.
+    build:
+      context: ${SRC_DIR:?defina SRC_DIR}/i1
+      dockerfile: Dockerfile.jetson
+      args:
+        BASE_IMAGE: ${I1_BASE_IMAGE:?defina I1_BASE_IMAGE}
+    image: ods-i1-gpu:${I1_REF:?fixe o commit do i1}
+    restart: unless-stopped
+    runtime: nvidia
+    # Sockets do P4 de outra build (ipc host + I1_P4_DIR em /tmp), como no builds/i1. Sem P4, não atrapalha.
+    ipc: host
+    environment:
+      ODS_KAFKA_BROKER: ${KAFKA_BROKER:?defina KAFKA_BROKER}
+      I1_COMMAND_TOPIC: ${I1_COMMAND_TOPIC:-ods.i1.command}
+      I1_CONSUMER_GROUP: ${I1_CONSUMER_GROUP:-ods-i1-inf-restrita}
+      I1_BACKEND: p2
+      I1_MODE: kafka
+      I1_VIDEOS_DIR: /videos
+      I1_DEFAULT_TTL: ${I1_DEFAULT_TTL:-60}
+      I1_CONF: ${I1_CONF:-0.50}
+      # trt: sem TensorRT o P2 dá erro em vez de cair calado para a CPU
+      P2_BACKEND: trt
+      P2_ENGINE_DIR: /opt/ods/engines
+      PYTHONUNBUFFERED: "1"
+    # Sem "--allow-fixtures-fallback": sem vídeo da equipe o pedido falha (no log) em vez de
+    # publicar as imagens de exemplo do pacote como se fossem da câmera.
+    command: ["python3", "-u", "I1/run_orchestrator.py"]
+    stop_grace_period: 30s
+    <<: *log
+    volumes:
+      - ${I1_ENGINES_DIR}:/opt/ods/engines:ro
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+      - ${I1_P4_DIR:?defina I1_P4_DIR}:/tmp
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  # ================================================================ I2 · rastreio (INV-1)
+  i2:
+    build: ${SRC_DIR}/i2
+    image: ods-i2:${I2_REF:?fixe o commit do i2}
+    restart: unless-stopped
+    <<: *log
+    command: ["--i1", "${KAFKA_BROKER}", "--kafka", "${KAFKA_BROKER}", "--fps", "${I2_FPS:-25}"]
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  # ================================================================ I3 · calibração (INV-1)
+  i3:
+    # Artefato, não serviço: ./inf_restrita.sh i3. Calibra a quadra de vôlei do A4 pela imagem do
+    # próprio repositório (linhas do chão, padrão FIVB, sem clique) e publica a CALIBRATION em
+    # ods.i3.calibration + ods.artifact.published, com o registro no volume i3-registro.
+    # Versão e valid_from fixos: rodar de novo só reanuncia (o registro recusa conteúdo diferente
+    # com a mesma versão). Para outra câmera, mude --versao.
+    build: ${SRC_DIR}/i3
+    image: ods-i3:${I3_REF:?fixe o commit do i3}
+    profiles: [i3]
+    restart: "no"
+    command: ["--source-id", "inf-restrita-quadra", "--versao", "cal-inf-restrita-quadra-1",
+              "--valido-desde", "2026-11-25T00:00:00+00:00",
+              "--espaco", "quadra-volei-fivb", "--origem", "canto proximo esquerdo",
+              "--eixos", "x ao longo dos 18 m, y afastando da camera",
+              "--linhas", "dados/quadra_mediana.png", "--padrao", "padroes/quadra-volei-fivb.json",
+              "--perto", "lateral y=0",
+              "--registro", "/registro", "--kafka", "${KAFKA_BROKER}"]
+    volumes:
+      # A imagem do I3 não leva dados/ (.dockerignore da equipe)
+      - ${SRC_DIR}/i3/dados:/app/dados:ro
+      - i3-registro:/registro
+
+volumes:
+  i3-registro:

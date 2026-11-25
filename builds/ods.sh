@@ -8,7 +8,8 @@
 #   ./ods.sh                       o mesmo que ./ods.sh lista
 #   ./ods.sh lista                 cada build: containers, imagens presentes e espaço
 #   ./ods.sh trocar <app>          remove as outras builds (--imagens) e sobe <app>
-#                                  (<app> = a1 … a8, ou inf: todas as inferências)
+#                                  (<app> = a1 … a8, inf: todas as inferências, ou
+#                                  inf_restrita: só I1, I2 e I3, com I1 próprio no Kafka da placa)
 #                                  (a build permanente do I1 fica de pé e com a imagem)
 #   ./ods.sh trocar <app> --dados  idem, apagando também os volumes das outras (pede confirmação de cada uma)
 #   ./ods.sh trocar <app> --codigo idem, apagando também os clones que só as outras usam
@@ -33,7 +34,7 @@ erro()  { echo "${R}✘ $*${N}" >&2; exit 1; }
 
 ajuda() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$SCRIPT"; }
 
-apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/; do d=${d%/}; d=${d##*/}; [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; }
+apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/ "$DIR"/inf_restrita/; do d=${d%/}; d=${d##*/}; [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; }
 # Serviços permanentes (ex.: i1): aparecem na lista, mas o "trocar" não os remove.
 permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; return 0; }
 

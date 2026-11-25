@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # testar-inf-repos.sh — as suítes de teste dos repositórios das equipes, dentro das imagens da
-# build "inf" (P3 / SIS-1).
+# build "inf" (padrão) ou "inf_restrita" (só I1, I2, I3) (P3 / SIS-1).
 #
-# Usa exatamente a imagem que cada serviço da builds/inf/docker-compose.yml usa (lida do
-# "docker compose config"), no commit fixado do inf.env. Não altera imagem nem código das
+# Usa exatamente a imagem que cada serviço da builds/<build>/docker-compose.yml usa (lida do
+# "docker compose config"), no commit fixado do <build>.env. Não altera imagem nem código das
 # equipes: o que a imagem não leva (pasta de testes, dados de teste, pytest) entra por volume
 # do clone em SRC_DIR, no mesmo commit, ou é instalado num container descartável.
 # As suítes rodam com --network none (nada vai para o Kafka), exceto a do I4, que precisa da
 # rede só para instalar o pytest.
 #
 # Itens:
-#   R-I1  suíte do I1 no serviço da build dedicada: validacao/i1/testar-i1-servico.sh (GPU)
+#   R-I1  suíte do I1 no serviço i1: validacao/i1/testar-i1-servico.sh (GPU); na inf, o da build
+#         dedicada builds/i1; na inf_restrita, o i1 próprio dela
 #   R-I2  I2/tests (unittest) do clone por volume na imagem ods-i2 (o .dockerignore do I2 tira os testes)
 #   R-I3  I3/tests (unittest) e dados/ do clone por volume na imagem ods-i3 (idem)
 #   R-I4  tests/ (pytest) do clone por volume na imagem ods-i4; pytest instalado na hora
@@ -23,16 +24,18 @@
 #   ./testar-inf-repos.sh                 todos
 #   ./testar-inf-repos.sh --sem-i1        sem o I1 (que usa a GPU e a build builds/i1)
 #   ./testar-inf-repos.sh i2 i9           só os citados (i1 i2 i3 i4 i6 i7 i8 i9)
-# O que vem do clone tem de estar no commit do inf.env (os clones de SRC_DIR são de todas as builds):
-# fora dele, o item FALHA e pede builds/inf/preparar-codigo.sh.
-# Resultado: validacao/inf/resultados/inf-repos-<data>.txt (+ pasta com a saída de cada suíte).
+#   ./testar-inf-repos.sh --build inf_restrita [i1 i2 i3]   imagens da build inf_restrita
+#                                         (= builds/inf_restrita/inf_restrita.sh repos)
+# O que vem do clone tem de estar no commit do <build>.env (os clones de SRC_DIR são de todas as
+# builds): fora dele, o item FALHA e pede builds/<build>/preparar-codigo.sh.
+# Resultado: validacao/<build>/resultados/<build>-repos-<data>.txt (+ pasta com a saída de cada suíte).
 # Código de saída: 0 se nenhum item falhou.
 set -euo pipefail
 [[ -n "${LC_ALL:-}" ]] && export LC_ALL=C.UTF-8
 
 AQUI="$(dirname "$(readlink -f "$0")")"
 P3="$(readlink -f "$AQUI/../..")"
-BUILD="$P3/builds/inf"
+NOME=inf
 LIMITE_S=${LIMITE_S:-1800}
 
 if [[ -t 1 ]]; then V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; NC=$'\e[0m'; else V=; A=; R=; NC=; fi
@@ -43,14 +46,25 @@ TODOS=(i1 i2 i3 i4 i6 i7 i8 i9)
 ALVOS=()
 while (( $# )); do
   case "$1" in
-    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --build)   shift; NOME=${1:?--build precisa de inf ou inf_restrita} ;;
     --sem-i1)  SEM_I1=1 ;;
     i1|i2|i3|i4|i6|i7|i8|i9) ALVOS+=("$1") ;;
-    i5) erro "o I5 está fora da build inf (24/11/2026)" ;;
+    i5) erro "o I5 está fora das builds inf e inf_restrita (24/11/2026)" ;;
     *) erro "opção desconhecida: $1 (veja --help)" ;;
   esac
   shift
 done
+case "$NOME" in
+  inf) ;;
+  inf_restrita)
+    TODOS=(i1 i2 i3)
+    for a in "${ALVOS[@]}"; do
+      [[ " ${TODOS[*]} " == *" $a "* ]] || erro "a build inf_restrita só tem i1, i2 e i3 (pedido: $a)"
+    done ;;
+  *) erro "--build aceita inf ou inf_restrita (recebi '$NOME')" ;;
+esac
+BUILD="$P3/builds/$NOME"
 (( ${#ALVOS[@]} )) || ALVOS=("${TODOS[@]}")
 if [[ -n "${SEM_I1:-}" ]]; then
   mapfile -t ALVOS < <(printf '%s\n' "${ALVOS[@]}" | grep -vx i1)
@@ -61,7 +75,7 @@ command -v docker >/dev/null || erro "docker não encontrado"
 command -v python3 >/dev/null || erro "python3 não encontrado"
 
 DATA=$(date +%Y-%m-%d-%H%M%S)
-SAIDA="$AQUI/resultados/inf-repos-$DATA"
+SAIDA="$P3/validacao/$NOME/resultados/$NOME-repos-$DATA"
 mkdir -p "$SAIDA"
 REL="$SAIDA.txt"
 declare -a ITENS=()
@@ -75,9 +89,9 @@ relatorio() {
   local cod=$?
   (( ${#ITENS[@]} )) || return "$cod"
   {
-    echo "Suítes das equipes nas imagens da build inf — $(date '+%Y-%m-%d %H:%M:%S %z')"
+    echo "Suítes das equipes nas imagens da build $NOME — $(date '+%Y-%m-%d %H:%M:%S %z')"
     echo "Placa: $(uname -n) · $(tr -d '\0' </proc/device-tree/model 2>/dev/null || echo '?')"
-    echo "Imagens (docker compose config de builds/inf):"
+    echo "Imagens (docker compose config de builds/$NOME):"
     sed 's/^/  /' "$SAIDA/imagens.txt" 2>/dev/null || true
     echo
     printf '%s\n' "${ITENS[@]}"
@@ -90,16 +104,16 @@ relatorio() {
 }
 trap relatorio EXIT
 
-# ---- imagens da build inf --------------------------------------------------------------------
-etapa "Imagens da build inf (docker compose config)"
+# ---- imagens da build --------------------------------------------------------------------
+etapa "Imagens da build $NOME (docker compose config)"
 cd "$BUILD"
-ENVS=(--env-file inf.env)
-[[ -f inf.local.env ]] && ENVS+=(--env-file inf.local.env)
+ENVS=(--env-file "$NOME.env")
+[[ -f "$NOME.local.env" ]] && ENVS+=(--env-file "$NOME.local.env")
 set -a
 # shellcheck source=/dev/null
-source ./inf.env
+source "./$NOME.env"
 # shellcheck source=/dev/null
-[[ -f inf.local.env ]] && source ./inf.local.env
+[[ -f "$NOME.local.env" ]] && source "./$NOME.local.env"
 set +a
 PERFIS=()
 while read -r p; do [[ -n "$p" ]] && PERFIS+=(--profile "$p"); done < <(docker compose "${ENVS[@]}" config --profiles)
@@ -115,9 +129,9 @@ sed 's/^/  /' "$SAIDA/imagens.txt"
 
 # Confere a imagem; devolve 1 (e registra FALHOU) se ela não existe
 tem_imagem() {   # tem_imagem <item> <imagem>
-  if [[ -z "$2" ]]; then item "$1" FALHOU "serviço ausente do docker-compose.yml da inf"; return 1; fi
+  if [[ -z "$2" ]]; then item "$1" FALHOU "serviço ausente do docker-compose.yml da $NOME"; return 1; fi
   docker image inspect "$2" >/dev/null 2>&1 && return 0
-  item "$1" FALHOU "a imagem $2 não existe nesta placa (rode builds/inf/inf.sh subir)"; return 1
+  item "$1" FALHOU "a imagem $2 não existe nesta placa (rode builds/$NOME/$NOME.sh subir)"; return 1
 }
 
 # O clone (de onde vêm testes e dados por volume) está no commit da imagem? Outra build pode ter
@@ -127,7 +141,7 @@ clone_no_commit() {   # clone_no_commit <item> <repo>; devolve 1 (e registra FAL
   var="${2^^}_REF"; esperado=${!var:-}
   atual=$(git -C "$SRC_DIR/$2" rev-parse HEAD 2>/dev/null || echo "sem clone")
   [[ -n "$esperado" && "$atual" == "$esperado" ]] && return 0
-  item "$1" FALHOU "o clone $SRC_DIR/$2 está em ${atual:0:12}, não no ${esperado:0:12} do inf.env (rode builds/inf/preparar-codigo.sh)"
+  item "$1" FALHOU "o clone $SRC_DIR/$2 está em ${atual:0:12}, não no ${esperado:0:12} do $NOME.env (rode builds/$NOME/preparar-codigo.sh)"
   return 1
 }
 
@@ -172,9 +186,11 @@ rodar_suite() {   # rodar_suite <item> <descrição> <arquivo de saída> -- <doc
 
 # ---- I1 ----------------------------------------------------------------------------------------
 if quer i1; then
-  etapa "R-I1 Suíte do I1 no serviço da build dedicada (validacao/i1/testar-i1-servico.sh)"
+  # Na inf, o I1 é o da build dedicada (builds/i1); na inf_restrita, o i1 próprio dela
+  build_i1=i1; [[ "$NOME" == inf_restrita ]] && build_i1=inf_restrita
+  etapa "R-I1 Suíte do I1 no serviço i1 da build $build_i1 (validacao/i1/testar-i1-servico.sh)"
   cod=0
-  "$P3/validacao/i1/testar-i1-servico.sh" > "$SAIDA/i1.txt" 2>&1 || cod=$?
+  "$P3/validacao/i1/testar-i1-servico.sh" --build "$build_i1" > "$SAIDA/i1.txt" 2>&1 || cod=$?
   resumo_i1=$(grep '^Resumo' "$SAIDA/i1.txt" | tail -1 || true)
   rel_i1=$(grep -o '/[^ ]*/i1-servico-[0-9-]*' "$SAIDA/i1.txt" | tail -1 || true)
   if (( cod == 0 )); then item R-I1 PASSOU "testar-i1-servico.sh: ${resumo_i1#Resumo: } (${rel_i1:-$SAIDA/i1.txt}.txt)"
