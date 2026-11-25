@@ -537,3 +537,14 @@
 ### 2026-11-25 — esclarecimento: "manter o kafka local" = container da placa sempre de pé; build na nuvem
 - Feito: inf_restrita.env (nuvem; KAFKA_LOCAL_CONTAINER=kafka), inf_restrita.local.env.exemplo (placa), inf_restrita.sh (checar_kafka_local no subir/testar; status mostra o container e a origem do broker; mensagem de conflito pede ../i1/i1.sh parar), compose (comentários), guia, README, CLAUDE.md; memória kafka-local-significado.
 - Validado: shellcheck, compose config (nuvem e com o .exemplo → placa), simulação dos 4 cenários.
+- Commit pedido pelo usuário: 434a542 (inf_restrita na nuvem). Sem push. Pedido seguinte do usuário: tirar o I1 permanente (escopo a combinar; pergunta interrompida).
+
+### 2026-11-25 16:25 — Jetson: inf_restrita na NUVEM: PASSOU 10, FALHOU 0, AVISO 0
+- ./inf_restrita.sh testar com KAFKA_BROKER=34.66.235.91:9093 (nuvem respondeu: id 1); container kafka da placa Up 19 h; I1 permanente parado. 150 detecções (-fp16), 150 trilhas, contrato 100%. Relatório na placa: resultados/aceite-inf_restrita-20261125-162407.txt.
+- Do notebook (fora da placa, só leitura, confluent-kafka): os 5 tópicos existem na nuvem com as mesmas contagens (command 1, detections 150, tracks 150, calibration 1, artifact.published 1) → acessíveis de fora.
+- Disco 4 GB livres (no limite).
+
+### 2026-11-25 — I1 volta a ler a pasta original dos vídeos (/home/sys2/SIS-2/videos)
+- Placa (usuário): a pasta existe (dono sys2; INV1 76 MB, INV2, VER2, VER2_2, VER5 19 MB). Antes o I1 lia INV1.mp4 de assets/ do p3 (VIDEO_DIR montado em /videos + I1_VIDEOS_DIR).
+- Feito: compose monta I1_VIDEOS_ORIGINAL no MESMO caminho, só leitura, create_host_path false; tirado I1_VIDEOS_DIR (vale o padrão do código); vídeos do P3 em /videos-p3. inf_restrita.sh: listar_originais via docker --mount (ods pode não ler /home/sys2), aviso se faltar a equipe do teste; status lista as duas pastas. Guia e CLAUDE.md.
+- Validado fora da placa: shellcheck, compose config, simulação subir/status. Falta na placa: parar && subir && testar.

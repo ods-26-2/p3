@@ -20,7 +20,7 @@
 # Dependências pela 6c (lidas nos repositórios em 25/11/2026):
 #   I1  ← P2 (biblioteca, wheel 0.2.0a1 dentro da imagem), B5 (pacotes de modelo, que vêm na
 #         própria develop do I1 em I1/artifacts), P4 (opcional: quadros por memória compartilhada;
-#         sem P4 o orquestrador lê VIDEO_DIR/<EQUIPE>.mp4).
+#         sem P4 o orquestrador lê <EQUIPE>.mp4 da pasta original da SIS-2, /home/sys2/SIS-2/videos).
 #   I2  ← ods.i1.detections (do I1 desta build).
 #   I3  ← imagem/linhas do chão (dados/ do próprio repositório; calibração da quadra do A4).
 #
@@ -92,7 +92,8 @@ services:
       I1_CONSUMER_GROUP: ${I1_CONSUMER_GROUP:-ods-i1-inf-restrita}
       I1_BACKEND: p2
       I1_MODE: kafka
-      I1_VIDEOS_DIR: /videos
+      # Sem I1_VIDEOS_DIR: vale o padrão do código, /home/sys2/SIS-2/videos (a pasta original da
+      # SIS-2, montada abaixo no mesmo caminho). Os vídeos do P3 ficam em /videos-p3 ("source").
       I1_DEFAULT_TTL: ${I1_DEFAULT_TTL:-60}
       I1_CONF: ${I1_CONF:-0.50}
       # trt: sem TensorRT o P2 dá erro em vez de cair calado para a CPU
@@ -106,7 +107,13 @@ services:
     <<: *log
     volumes:
       - ${I1_ENGINES_DIR}:/opt/ods/engines:ro
-      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos:ro
+      # Pasta da SIS-2 (outro grupo): só leitura, e sem criar a pasta se ela faltar (o up falha)
+      - type: bind
+        source: ${I1_VIDEOS_ORIGINAL:?defina I1_VIDEOS_ORIGINAL}
+        target: /home/sys2/SIS-2/videos
+        read_only: true
+        bind: { create_host_path: false }
+      - ${VIDEO_DIR:?defina VIDEO_DIR}:/videos-p3:ro
       - ${I1_P4_DIR:?defina I1_P4_DIR}:/tmp
     depends_on:
       kafka-topicos: { condition: service_completed_successfully }

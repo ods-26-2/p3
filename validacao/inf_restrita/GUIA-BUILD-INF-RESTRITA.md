@@ -14,7 +14,7 @@ passaram no notebook (Python 3.14, o da imagem), nos commits fixados. **Ainda n�
 
 | Inferência | Serviço | Como roda | Entrada | Saída (tópico) |
 |---|---|---|---|---|
-| I1 detecção | `i1` | contínuo, GPU (TensorRT via P2), orquestrador **desta build** | `./inf_restrita.sh i1 [EQUIPE] [QUADROS]` → `ods.i1.command`; lê `VIDEO_DIR/<EQUIPE>.mp4` | `ods.i1.detections` |
+| I1 detecção | `i1` | contínuo, GPU (TensorRT via P2), orquestrador **desta build** | `./inf_restrita.sh i1 [EQUIPE] [QUADROS]` → `ods.i1.command`; lê `<EQUIPE>.mp4` da pasta original `/home/sys2/SIS-2/videos` | `ods.i1.detections` |
 | I2 rastreio | `i2` | contínuo | `ods.i1.detections` | `ods.i2.tracks` |
 | I3 calibração | `i3` | `./inf_restrita.sh i3` | imagem da quadra do A4 (`dados/` do repositório do I3) | `ods.i3.calibration`, `ods.artifact.published` |
 | — | `i1-engine` | one-shot no `subir` | pacotes de `I1_PACOTES` | engines em `/var/lib/ods/engines` |
@@ -50,7 +50,7 @@ HEAD mais novo de cada repositório.
 |---|---|---|
 | I1 | **P2** (runtime de aceleração) | biblioteca dentro da imagem: wheel `p2 0.2.0a1 [trt,cpu]` do `Dockerfile.jetson` do I1 (existe a `v0.2.0a3`; a troca é do MOD-1) |
 | I1 | **B5** (modelos) | os pacotes vêm na própria develop do I1 (`I1/artifacts`: `app-plates 1.0.0`, `app-epi 1.0.0`, `app-industry 1.0.0`, `app-sports 1.2.0`). A `main` do B5 (04/11) só tem `app-plates` (mesmo ONNX, sha256 `b698a519…`) e `app-epi` |
-| I1 | **P4** (vídeo) | opcional; sem P4, `VIDEO_DIR/<EQUIPE>.mp4` (instalados por `../i1/i1.sh videos`) |
+| I1 | **P4** (vídeo) | opcional; sem P4 (pedido sem `source`), `<EQUIPE>.mp4` da pasta original do código, `/home/sys2/SIS-2/videos` (da SIS-2, nesta placa), montada **só leitura** no mesmo caminho (desde 25/11). Vídeos do P3 (`assets/`) em `/videos-p3`, por `"source": "/videos-p3/<EQUIPE>.mp4"` (VER1, VER3, VER6 não estão na pasta da SIS-2) |
 | I2 | I1 (`ods.i1.detections`) | o I1 desta build |
 | I3 | — (imagem e padrão do chão) | `dados/` do clone, por volume (o `.dockerignore` do I3 tira `dados/` da imagem) |
 | testes | B1 (schemas) | o schema de cada tópico que vem no **próprio repositório produtor** (`schemas/`) |

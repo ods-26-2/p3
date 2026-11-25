@@ -96,11 +96,32 @@ checar_entradas() {
   checar_i1_permanente
   checar_pasta "$I1_ENGINES_DIR" "engines TensorRT"
   checar_pasta "$I1_P4_DIR" "sockets do P4 de outra build"
-  # Vídeos das equipes: o mesmo instalador do builds/i1 (assets/ do p3 → VIDEO_DIR + links <SQUAD>.mp4)
-  etapa "Vídeos das equipes (../i1/i1.sh videos)"
-  "$ODS_DIR_BUILDS/i1/i1.sh" videos || aviso "não instalei os vídeos; o I1 só atende equipe com VIDEO_DIR/<EQUIPE>.mp4"
-  entrada_arquivo "$VIDEO_DIR/$INF_I1_EQUIPE.mp4" "vídeo do teste ($INF_I1_EQUIPE)" "o ./inf_restrita.sh testar não terá o que ler"
+  # Vídeos do P3 (/videos-p3 no container): o mesmo instalador do builds/i1 (assets/ → VIDEO_DIR)
+  etapa "Vídeos do P3 (../i1/i1.sh videos), em /videos-p3 no I1"
+  "$ODS_DIR_BUILDS/i1/i1.sh" videos || aviso "não instalei os vídeos do P3 (/videos-p3)"
+  etapa "Pasta original dos vídeos do I1 (SIS-2): $I1_VIDEOS_ORIGINAL"
+  videos_originais
   livre_ram_mb >/dev/null
+  return 0
+}
+
+# A pasta da SIS-2 (usuário sys2) pode não ser legível pelo usuário ods; o Docker (root) a monta.
+# Lista pelo próprio Docker, só leitura, na imagem do Kafka que já está na placa.
+listar_originais() {
+  # --mount (e não -v): se a pasta não existir, falha em vez de criá-la como root
+  docker run --rm --network none --mount "type=bind,source=$I1_VIDEOS_ORIGINAL,target=/v,readonly" \
+    --entrypoint ls "$KAFKA_IMG" -1 /v 2>/dev/null
+}
+videos_originais() {
+  local lista
+  lista=$(listar_originais) || true
+  if [[ -z "$lista" ]]; then
+    aviso "pasta $I1_VIDEOS_ORIGINAL vazia ou ausente: pedido sem \"source\" falha (use \"source\": \"/videos-p3/<SQUAD>.mp4\")"
+    return 0
+  fi
+  ok "vídeos na pasta original: $(tr '\n' ' ' <<<"$lista")"
+  grep -qx "$INF_I1_EQUIPE.mp4" <<<"$lista" \
+    || aviso "falta $INF_I1_EQUIPE.mp4 na pasta original: o ./inf_restrita.sh testar não terá o que ler"
   return 0
 }
 
@@ -376,6 +397,9 @@ status() {
   mapfile -t ids < <(docker ps -q --filter label=com.docker.compose.project="$PROJETO")
   (( ${#ids[@]} )) && docker stats --no-stream --format '  {{.Name}}: {{.MemUsage}}' "${ids[@]}" 2>/dev/null
   echo "Memória disponível: $(livre_ram_mb 2>/dev/null) MB"
+  echo
+  echo "Vídeos na pasta original ($I1_VIDEOS_ORIGINAL): $(listar_originais | tr '\n' ' ')"
+  echo "Vídeos do P3 em /videos-p3 ($VIDEO_DIR): $(find "$VIDEO_DIR" -maxdepth 1 -name "*.mp4" -printf "%f " 2>/dev/null | sort)"
   echo
   echo "Engines em $I1_ENGINES_DIR:"
   local p

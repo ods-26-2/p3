@@ -176,6 +176,8 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - **Kafka da nuvem** (`34.66.235.91:9093`, no `.env`). "Manter o Kafka local" = **manter o container `kafka` da placa rodando** (usuário, 25/11), não usar o broker dele: a build confere (`KAFKA_LOCAL_CONTAINER`) e avisa se estiver parado. Broker da placa só por `inf_restrita.local.env`. Recusa subir/testar se o I1 permanente estiver de pé no mesmo broker (dois orquestradores na GPU): `../i1/i1.sh parar`.
 - Testes: `./inf_restrita.sh testar` (T-I1/T-I1S/T-I1G/T-I1M/T-I2/T-I3 por `source_id` do teste + T-C1–T-C4: contrato com o schema do próprio repositório, dentro da imagem dele, `contrato/validar.py`) e `./inf_restrita.sh repos` (= `validacao/inf/testar-inf-repos.sh --build inf_restrita`; o `testar-i1-servico.sh` aceita `--build inf_restrita`). Guia: `validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md`.
 - Dependências (6c): P2 (wheel 0.2.0a1 na imagem do I1; existe 0.2.0a3), B5 (pacotes na develop do I1, mais novos que a `main` do B5), P4 opcional.
+- Vídeos (25/11): o I1 lê a pasta **original** do código, `/home/sys2/SIS-2/videos` (existe na placa, dono `sys2`/SIS-2; INV1, INV2, VER2, VER2_2, VER5), montada só leitura no mesmo caminho, sem `I1_VIDEOS_DIR` e sem criar a pasta (`create_host_path: false`). Os do P3 ficam em `/videos-p3` (pedido com `"source"`). O I1 não registra no log qual vídeo abriu.
+- **Jetson 25/11, Kafka da nuvem:** `./inf_restrita.sh testar` PASSOU 10/0/0 (antes da troca para a pasta original); do notebook, os 5 tópicos aparecem na nuvem.
 
 **Tags no p3:** `a8-minimo-v1` (A8 + I7). A cadeia foi validada em 12/11/2026; a tag `a8-cadeia-v1` foi proposta e precisa ser conferida com o usuário.
 
