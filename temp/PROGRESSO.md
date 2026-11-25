@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: build "inf_restrita" (só I1, I2, I3; I1 próprio; Kafka da placa fixo)
-- Fase: escrita e validada fora da placa (25/11/2026); falta rodar na Jetson
-- Último resultado: compose config OK (clones reais), shellcheck OK, simulação testar (sucesso 10/0; I2 inválido + fp32 → T-C2/T-I1G FALHOU; I1 mudo + I3 falha → 7 FALHOU), trava do I1 permanente no mesmo broker OK; validar.py contra exemplos dos repos OK; I2 35 OK e I3 33 OK no notebook
-- Próximo passo: commit (aguarda usuário); na placa: git pull; ../i1/i1.sh parar OU rm ../i1/i1.local.env (o permanente hoje está no Kafka da placa); ./inf_restrita.sh; ./inf_restrita.sh testar; ./inf_restrita.sh repos
-- Bloqueios / perguntas abertas ao usuário: confirmar I1 próprio x usar o permanente; o permanente está no Kafka da placa (i1.local.env) e conflita
+- Aplicação em foco: build "inf_restrita" (só I1, I2, I3; I1 próprio)
+- Fase: Jetson PASSOU 10/0/0 com o Kafka da placa (25/11); trocada para o Kafka da NUVEM (validado só fora da placa)
+- Último resultado: usuário esclareceu: "manter kafka local" = container kafka da placa sempre rodando, não usar o broker. Build: KAFKA_BROKER nuvem, KAFKA_CONTAINER vazio, KAFKA_LOCAL_CONTAINER=kafka conferido (aviso se parado); local.env.exemplo com a placa. Simulação: feliz 10/0; kafka local parado → aviso; I1 permanente na nuvem → recusa; na placa → aviso.
+- Próximo passo: commit (aguarda usuário); na placa: git pull; ../i1/i1.sh parar (se na nuvem); ./inf_restrita.sh parar && ./inf_restrita.sh && ./inf_restrita.sh testar; evidência do teste 161228 para validacao/inf_restrita/evidencias/
+- Bloqueios / perguntas abertas ao usuário: disco da placa 3,7 GB livres (< 4 GB); I1 permanente e o desta build não podem ficar juntos na nuvem
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -526,3 +526,14 @@
 - Feito: builds/inf_restrita/{docker-compose.yml, inf_restrita.env, inf_restrita.sh, limpar.sh, preparar-codigo.sh, contrato/validar.py}; validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md; testar-inf-repos.sh ganhou --build inf|inf_restrita (resultados em validacao/<build>/resultados); testar-i1-servico.sh aceita --build inf_restrita (e lê <build>.local.env); ods.sh lista inf_restrita; builds/README.md e CLAUDE.md §5.
 - Validação local: docker-compose v2.32.4 e shellcheck 0.10.0 copiados do scratchpad de 24/11 para o desta sessão. Defeito achado e corrigido antes da simulação: contrato() com pipefail somava uma 2ª linha "CONTRATO 0 0" quando o validador saía com 1.
 - Simulação (docker falso em scratchpad/sim): testar sucesso PASSOU 10; I2 inválido + I1 fp32 → T-C2 e T-I1G FALHOU; I1 sem resposta + I3 código 2 → 7 FALHOU após 5 min; subir encadeia (videos via ../i1/i1.sh videos, engines, "Aguardando comandos"); repos chama testar-i1-servico.sh --build inf_restrita; repos i4 recusado; inf padrão inalterada.
+- Commits pedidos pelo usuário: 771a237 (inf: evidência 25/11 + guia) e 7ea744f (inf_restrita). Sem push. A2 segue sem commit.
+
+### 2026-11-25 19:xx — Jetson: inf_restrita de pé e testada (Kafka da placa)
+- ./inf_restrita.sh status: i1 e i2 running, 0 reinícios; sessão INV1 encerrada (max_frames_reached, 150 quadros); último teste resultados/aceite-inf_restrita-20261125-161228.txt: PASSOU 10, FALHOU 0, AVISO 0. I1 permanente não aparece de pé.
+- Disco: 3,7 GB livres (94%), ABAIXO do mínimo de 4 GB: próxima build vai parar (checar_disco).
+- Pergunta do usuário: a build considera o Kafka da nuvem? Não: KAFKA_BROKER=172.18.4.56:9093 por desenho (pedido de 25/11, "kafka local sempre"). Oferecido: inf_restrita.local.env com a nuvem (só na placa) ou mudar o .env.
+- Falta: copiar o relatório para validacao/inf_restrita/evidencias/ (pedir ao usuário).
+
+### 2026-11-25 — esclarecimento: "manter o kafka local" = container da placa sempre de pé; build na nuvem
+- Feito: inf_restrita.env (nuvem; KAFKA_LOCAL_CONTAINER=kafka), inf_restrita.local.env.exemplo (placa), inf_restrita.sh (checar_kafka_local no subir/testar; status mostra o container e a origem do broker; mensagem de conflito pede ../i1/i1.sh parar), compose (comentários), guia, README, CLAUDE.md; memória kafka-local-significado.
+- Validado: shellcheck, compose config (nuvem e com o .exemplo → placa), simulação dos 4 cenários.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# inf_restrita.sh — build "inf_restrita": só as inferências I1, I2 e I3, no Kafka da placa (P3 / SIS-1).
+# inf_restrita.sh — build "inf_restrita": só as inferências I1, I2 e I3, no Kafka da nuvem (P3 / SIS-1).
 #
 #   ./inf_restrita.sh              o mesmo que ./inf_restrita.sh subir
 #   ./inf_restrita.sh subir        confere a placa, baixa o código, constrói o que falta (a imagem do
@@ -20,8 +20,10 @@
 #   ./inf_restrita.sh status       containers, I1, memória, disco e Kafka
 #   ./inf_restrita.sh parar        derruba a build (volumes mantidos)
 #
-# Kafka: sempre o da placa (KAFKA_BROKER do .env). O I1 é próprio desta build: se o I1 permanente
-# (builds/i1) estiver no MESMO broker, a subida recusa (dois orquestradores disputariam a GPU).
+# Kafka: o da nuvem (KAFKA_BROKER do .env; o da placa só por inf_restrita.local.env). O container
+# "kafka" da placa tem de continuar rodando: a build confere e avisa, e nunca o para.
+# O I1 é próprio desta build: se o I1 permanente (builds/i1) estiver no MESMO broker, a subida
+# recusa (dois orquestradores disputariam a GPU e os pedidos).
 # Para remover a build da placa: ./limpar.sh (veja ./limpar.sh --help)
 # Guia: validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md
 # Variáveis opcionais: MIN_LIVRE_GB (padrão 4), ESPERA_S (padrão 300)
@@ -70,15 +72,26 @@ checar_i1_permanente() {
   broker=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | sed -n 's/^ODS_KAFKA_BROKER=//p')
   if [[ "$broker" == "$KAFKA_BROKER" ]]; then
     erro "o I1 permanente (builds/i1) está de pé no MESMO Kafka ($KAFKA_BROKER).
-  Dois orquestradores atenderiam os mesmos pedidos e disputariam a GPU. Escolha um:
-    - volte o I1 permanente para a nuvem: rm ../i1/i1.local.env && ../i1/i1.sh subir
-    - ou pare-o enquanto usa esta build: ../i1/i1.sh parar"
+  Dois orquestradores atenderiam os mesmos pedidos e disputariam a GPU. Pare-o enquanto usa esta
+  build: ../i1/i1.sh parar  (para voltar: ./inf_restrita.sh parar && ../i1/i1.sh)"
   fi
   aviso "o I1 permanente (builds/i1) também está de pé (Kafka $broker). Cada um atende o seu broker,
   mas os dois dividem a GPU: pedidos simultâneos podem faltar memória (OUT_OF_MEMORY)."
 }
 
+# O Kafka da turma NA PLACA tem de continuar rodando (usuário, 25/11/2026), mesmo quando esta build
+# usa o da nuvem. Só confere e avisa: o container é de outro grupo (nunca parar nem recriar).
+checar_kafka_local() {
+  local c=${KAFKA_LOCAL_CONTAINER:-kafka} estado
+  estado=$(docker ps -a --filter name="^${c}\$" --format '{{.Status}}' || true)
+  if [[ -z "$estado" ]]; then aviso "o container '$c' (Kafka da turma na placa) não existe nesta placa"
+  elif [[ "$estado" == Up* ]]; then ok "Kafka da turma na placa ('$c') rodando: $estado"
+  else aviso "o Kafka da turma na placa ('$c') está PARADO ($estado). Ele tem de ficar de pé.
+  Avise o grupo dono; para religar: docker start $c"; fi
+}
+
 checar_entradas() {
+  checar_kafka_local
   checar_gpu
   checar_i1_permanente
   checar_pasta "$I1_ENGINES_DIR" "engines TensorRT"
@@ -251,6 +264,7 @@ esperar_sessao() {   # esperar_sessao <container> <equipe> <desde> <segundos>
 testar() {
   etapa "Conferindo"
   aceite_conferir i1 i2
+  checar_kafka_local
   checar_i1_permanente
   local c1 p; c1=$(container_i1)
   for p in $I1_PACOTES; do engine_existe "$p" || erro "falta a engine de $p; rode ./inf_restrita.sh engines antes"; done
@@ -371,8 +385,8 @@ status() {
   echo
   df -h /
   echo
-  docker ps -a --filter name="^${KAFKA_CONTAINER:-kafka}\$" --format 'Kafka da turma: {{.Status}}'
-  echo "Kafka da build: $KAFKA_BROKER"
+  docker ps -a --filter name="^${KAFKA_LOCAL_CONTAINER:-kafka}\$" --format 'Kafka da turma na placa: {{.Status}}'
+  echo "Kafka da build: $KAFKA_BROKER ($([[ -f inf_restrita.local.env ]] && echo 'do inf_restrita.local.env' || echo 'do inf_restrita.env'))"
   local rel
   # shellcheck disable=SC2012
   rel=$(ls -t resultados/aceite-inf_restrita-*.txt 2>/dev/null | head -1 || true)

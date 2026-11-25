@@ -2,7 +2,10 @@
 
 Guia de execução e de teste da build `builds/inf_restrita` (P3 · SIS-1). Montada em 25/11/2026.
 
-**Estado (25/11/2026):** validada só fora da placa: `docker compose config` com os clones reais (v2.32.4),
+**Estado (25/11/2026):** na Jetson, com o Kafka **da placa** (1ª versão), `./inf_restrita.sh testar`
+PASSOU 10, FALHOU 0, AVISO 0 (`resultados/aceite-inf_restrita-20261125-161228.txt`). Depois, a pedido do
+usuário, a build passou para o **Kafka da nuvem** (o container `kafka` da placa só precisa continuar
+rodando): essa versão foi validada só fora da placa. Antes, a 1ª versão foi validada fora da placa: `docker compose config` com os clones reais (v2.32.4),
 `bash -n`, `shellcheck`, os scripts contra um `docker` simulado (sucesso e falha) e o validador de
 contrato contra os exemplos válidos e inválidos dos três repositórios. As suítes do I2 (35) e do I3 (33)
 passaram no notebook (Python 3.14, o da imagem), nos commits fixados. **Ainda não rodada na Jetson.**
@@ -27,16 +30,17 @@ HEAD mais novo de cada repositório.
 
 ## 2. Decisões
 
-- **Kafka sempre o da placa** (`172.18.4.56:9093`, listener PRIVATE do container `kafka` da turma),
-  fixo no `.env`. As aplicações e o I1 permanente (`builds/i1`) falam com o Kafka da nuvem; esta build
-  fica local. O padrão do orquestrador do I1 é a nuvem (`DEFAULT_CLOUD_BROKER`): o compose o troca por
-  `ODS_KAFKA_BROKER`.
+- **Kafka da nuvem** (`34.66.235.91:9093`), a comunicação principal, como as aplicações. "Manter o
+  Kafka local" (usuário, 25/11) quer dizer **manter o container `kafka` da placa rodando**: o `subir`, o
+  `testar` e o `status` conferem e avisam se ele estiver parado (a build nunca o para; religar é com o
+  grupo dono: `docker start kafka`). Para usar o broker da placa só nesta Jetson:
+  `cp inf_restrita.local.env.exemplo inf_restrita.local.env`.
 - **I1 próprio:** a mesma imagem do `builds/i1` (`ods-i1-gpu:<I1_REF>`, base `l4t-tensorrt` r10.3.0),
   então não há build nova se ela já existe. Grupo de consumo próprio (`ods-i1-inf-restrita`).
 - **Dois orquestradores no mesmo broker não podem:** atenderiam o mesmo pedido e disputariam a GPU
-  (7,4 GB divididos com a CPU). Se o I1 permanente estiver de pé no **mesmo** Kafka, o `subir` e o
-  `testar` recusam e dizem as saídas: voltar o permanente para a nuvem (`rm ../i1/i1.local.env &&
-  ../i1/i1.sh subir`) ou pará-lo (`../i1/i1.sh parar`). Em brokers diferentes, só avisa da memória.
+  (7,4 GB divididos com a CPU). Se o I1 permanente estiver de pé no **mesmo** Kafka (com os dois na
+  nuvem, o normal), o `subir` e o `testar` recusam: pare-o com `../i1/i1.sh parar` enquanto usa esta
+  build. Em brokers diferentes, só avisa da memória.
 - **Mínimo pelo código:** só I1, I2 e I3. Sem P4 (o orquestrador lê os vídeos das equipes; a
   memória compartilhada do P4 de outra build continua ligada por `ipc: host` + `I1_P4_DIR`).
 
@@ -56,7 +60,8 @@ HEAD mais novo de cada repositório.
 ```bash
 cd /opt/ods/p3 && git pull
 cd builds/inf_restrita
-./inf_restrita.sh            # confere a placa (GPU, Kafka, I1 permanente), código, imagens, sobe i1 + i2, engines
+../i1/i1.sh parar            # se o I1 permanente estiver de pé no mesmo Kafka (nuvem)
+./inf_restrita.sh            # confere a placa (GPU, Kafka da nuvem, container kafka local, I1 permanente), sobe i1 + i2
 ./inf_restrita.sh status
 ./inf_restrita.sh i1 INV1 150    # pedido ao I1 desta build
 ./inf_restrita.sh i3             # calibração da quadra

@@ -59,8 +59,9 @@ Sem `i1` próprio: o I1 é o de `i1/` (tem de estar de pé e no mesmo Kafka; o `
 |---|---|---|---|---|
 | `inf_restrita/` | `i1` (orquestrador **próprio**, GPU) + `i2` | `./inf_restrita.sh i1 [EQUIPE] [QUADROS]` · `i3` (calibração da quadra do A4) | `./inf_restrita.sh testar` (cadeia I1 → I2, I3 e contrato com o schema de cada repositório) · `./inf_restrita.sh repos` (suítes das equipes nas imagens) | [`validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md`](../validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md) |
 
-Kafka **sempre o da placa** (`172.18.4.56:9093`), mesmo com as aplicações e o I1 permanente na nuvem. A imagem do I1 é a
-mesma do `i1/` (`ods-i1-gpu:<I1_REF>`): não reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
+Kafka **da nuvem** (`34.66.235.91:9093`); o container `kafka` da placa tem de continuar rodando (a build confere e avisa).
+Broker da placa só por `inf_restrita.local.env`. A imagem do I1 é a mesma do `i1/` (`ods-i1-gpu:<I1_REF>`): não
+reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
 
 ## Estrutura comum
 

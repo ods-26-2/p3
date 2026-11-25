@@ -5,12 +5,13 @@
 # Variáveis em inf_restrita.env (commits fixados, Kafka, entradas). Sem segredos.
 #
 # Desenho (25/11/2026):
-#   - Kafka SEMPRE o da placa (172.18.4.56:9093, listener PRIVATE do container "kafka" da turma).
-#     As aplicações e o I1 permanente (builds/i1) usam o Kafka da nuvem; esta build fica local.
-#   - I1 PRÓPRIO (o I1 permanente estará na nuvem): o mesmo orquestrador da develop do I1, na
-#     mesma imagem ods-i1-gpu:<I1_REF> do builds/i1 (não reconstrói se ela já existe), com grupo
-#     de consumo próprio. Dois orquestradores no MESMO broker disputariam a GPU e os pedidos: o
-#     inf_restrita.sh recusa subir se o I1 permanente estiver no mesmo Kafka.
+#   - Kafka da NUVEM (34.66.235.91:9093), a comunicação principal, como as aplicações. O container
+#     "kafka" da turma na placa continua rodando (o inf_restrita.sh confere e nunca o para); para usar
+#     o broker da placa só nesta Jetson: inf_restrita.local.env (veja o .exemplo).
+#   - I1 PRÓPRIO: o mesmo orquestrador da develop do I1, na mesma imagem ods-i1-gpu:<I1_REF> do
+#     builds/i1 (não reconstrói se ela já existe), com grupo de consumo próprio. Dois orquestradores
+#     no MESMO broker disputariam a GPU e os pedidos: o inf_restrita.sh recusa subir se o I1
+#     permanente (builds/i1) estiver de pé no mesmo Kafka.
 #   - Contínuos (sobem com "up"): i1 (espera pedidos em ods.i1.command) e i2.
 #   - Sob demanda: i3 (./inf_restrita.sh i3) e i1-engine (no "subir").
 #   - Testes: ./inf_restrita.sh testar (cadeia + contrato com o schema de cada repositório) e
@@ -23,7 +24,7 @@
 #   I2  ← ods.i1.detections (do I1 desta build).
 #   I3  ← imagem/linhas do chão (dados/ do próprio repositório; calibração da quadra do A4).
 #
-# Tópicos (Kafka da placa):
+# Tópicos (no Kafka da build):
 #   i1  ods.i1.command -> ods.i1.detections
 #   i2  ods.i1.detections -> ods.i2.tracks
 #   i3  (linhas da quadra) -> ods.i3.calibration + ods.artifact.published
@@ -37,7 +38,7 @@ x-log: &log
 services:
 
   kafka-topicos:
-    # Cria, se ainda não existirem, os tópicos desta build no Kafka da placa. Roda e termina.
+    # Cria, se ainda não existirem, os tópicos desta build no Kafka da build. Roda e termina.
     image: confluentinc/cp-kafka:latest
     restart: "no"
     entrypoint: ["sh", "-c"]
@@ -74,8 +75,7 @@ services:
     # builds/i1 (validada na Jetson em 24/11/2026).
     # CONTORNO DO P3: base l4t-tensorrt runtime pelo ARG BASE_IMAGE do Dockerfile.jetson (a padrão,
     # l4t-jetpack, gerou uma imagem de 16,5 GB). Para desfazer: tire o "args".
-    # O padrão do orquestrador é o Kafka da nuvem (DEFAULT_CLOUD_BROKER): ODS_KAFKA_BROKER o troca
-    # pelo da placa.
+    # O broker vem de ODS_KAFKA_BROKER (o padrão do código, DEFAULT_CLOUD_BROKER, é o mesmo da nuvem).
     build:
       context: ${SRC_DIR:?defina SRC_DIR}/i1
       dockerfile: Dockerfile.jetson
