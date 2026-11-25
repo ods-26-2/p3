@@ -1,0 +1,26 @@
+Suítes das equipes nas imagens da build inf — Jetson ods-pc, 24/11/2026 ~22:28 (Kafka da placa)
+1ª execução do validacao/inf/testar-inf-repos.sh (versão do commit e105e37). Resumo feito pelo P3 a
+partir das saídas trazidas pelo usuário (i1.txt, i2.txt, i3.txt, i4.txt, i8.txt, i9.txt).
+
+R-I1  PASSOU — testar-i1-servico.sh (build i1, ods-i1-gpu:3b2a9cc): S01, S02 (45 de 46; só o test_05,
+              que precisa do ultralytics) e S03 (9 mensagens, artifact_version app-plates-1.0.0-fp16)
+R-I2  FALHOU — "Start directory is not importable: 'I2/tests'": o .dockerignore do I2 tira I2/tests
+              da imagem. Defeito do script (não da equipe): corrigido montando os testes do clone.
+R-I3  FALHOU — idem (o .dockerignore do I3 tira I3/tests e dados/). Corrigido do mesmo jeito.
+R-I4  FALHOU — 74 passed, 3 failed: os 3 gravam parquet e o pandas não acha o pyarrow na imagem
+              ods-i4:503f64b (o requirements-i4.txt pede pyarrow>=15). O reconhecimento ao vivo
+              (pipeline.live) não usa parquet: não afeta o serviço i4 da inf. A investigar na placa.
+R-I6  AVISO  — sem suíte no repositório
+R-I7  AVISO  — sem suíte no repositório
+R-I8  PASSOU — 139 passed (comando padrão da imagem ods-i8-publisher:051851f)
+R-I9  PASSOU — 130 testes OK (ods-i9:8ae3933)
+
+Diagnóstico do I4 (Jetson, mesma noite): pip show pyarrow → 26.0.1; import pyarrow →
+  "ImportError: pyarrow requires NumPy 2.0 or newer, found 1.26.4". O requirements-i4.txt fixa
+  numpy>=1.26,<2 mas deixa pyarrow>=15 sem teto; o pyarrow não declara numpy como dependência,
+  então o pip instalou o 26 sem conflito aparente. Recado à INV-2: teto no pyarrow (o S6 da build
+  do A6 usa pyarrow==17.0.0 com numpy 1.26.4) ou numpy 2 em tudo.
+
+Próximo: rodar de novo com o script corrigido (I2/I3). Comando do diagnóstico do I4:
+  docker run --rm --entrypoint sh ods-i4:503f64b304e3ae0b0a248671bf03c8b008dae75d -c \
+    'pip show pyarrow; python -c "import pyarrow; print(pyarrow.__version__)"'

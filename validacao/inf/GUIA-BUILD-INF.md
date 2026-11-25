@@ -101,13 +101,16 @@ cd /opt/ods/p3/validacao/inf
 
 | Item | Suíte | Como roda | Esperado |
 |---|---|---|---|
-| R-I1 | `I1/tests` + CMD da imagem | `validacao/i1/testar-i1-servico.sh` (build `i1`) | PASSOU (45 de 46; o `test_05` precisa do `ultralytics`) |
-| R-I2 | `I2/tests` (unittest) | já na imagem `ods-i2` | PASSOU (o CI da equipe roda a mesma suíte) |
-| R-I3 | `I3/tests` (unittest) | já na imagem; `dados/` do clone por volume | PASSOU (idem) |
-| R-I4 | `tests/` (pytest) | do clone por volume; `pytest` instalado no container (precisa de rede) | a conferir: sem CI na equipe |
+| R-I1 | `I1/tests` + CMD da imagem | `validacao/i1/testar-i1-servico.sh` (build `i1`) | PASSOU (Jetson 24/11: 45 de 46, o `test_05` precisa do `ultralytics`; CMD com `-fp16`) |
+| R-I2 | `I2/tests` (unittest) | do clone por volume (o `.dockerignore` do I2 tira os testes da imagem) | PASSOU (o CI da equipe roda a mesma suíte) |
+| R-I3 | `I3/tests` (unittest) | testes e `dados/` do clone por volume (idem) | PASSOU (idem) |
+| R-I4 | `tests/` (pytest) | do clone por volume; `pytest` instalado no container (precisa de rede) | Jetson 24/11: 74 de 77; os 3 que gravam parquet falham: o pip instala o `pyarrow` 26, que exige numpy 2, e o I4 fixa numpy < 2 (não afeta o ao vivo; recado à INV-2) |
 | R-I6, R-I7 | — | o repositório não tem suíte | AVISO |
-| R-I8 | contrato e publicador (pytest) | comando padrão da imagem `ods-i8-publisher` | PASSOU (o CI da equipe roda a mesma suíte) |
-| R-I9 | `I9/tests` (unittest) | do clone por volume | PASSOU (130 testes OK fora da placa, Python 3.10, 24/11/2026) |
+| R-I8 | contrato e publicador (pytest) | comando padrão da imagem `ods-i8-publisher` | PASSOU (Jetson 24/11: 139 passed) |
+| R-I9 | `I9/tests` (unittest) | do clone por volume | PASSOU (Jetson 24/11: 130 OK) |
+
+O que vem do clone tem de estar no commit do `inf.env` (o script confere; outra build pode ter
+movido o clone compartilhado). Evidência da 1ª execução: `evidencias/inf-repos-20261124-2228.txt`.
 
 Todas rodam com `--network none` (nada vai para o Kafka), menos a do I4. Relatório em
 `validacao/inf/resultados/inf-repos-<data>.txt`; copie para `evidencias/` o que for evidência.

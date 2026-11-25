@@ -11,8 +11,8 @@
 #
 # Itens:
 #   R-I1  suíte do I1 no serviço da build dedicada: validacao/i1/testar-i1-servico.sh (GPU)
-#   R-I2  I2/tests (unittest), já dentro da imagem ods-i2
-#   R-I3  I3/tests (unittest), já dentro da imagem ods-i3; dados/ do clone por volume
+#   R-I2  I2/tests (unittest) do clone por volume na imagem ods-i2 (o .dockerignore do I2 tira os testes)
+#   R-I3  I3/tests (unittest) e dados/ do clone por volume na imagem ods-i3 (idem)
 #   R-I4  tests/ (pytest) do clone por volume na imagem ods-i4; pytest instalado na hora
 #   R-I6  o repositório não tem suíte (AVISO)
 #   R-I7  o repositório não tem suíte (AVISO)
@@ -23,6 +23,8 @@
 #   ./testar-inf-repos.sh                 todos
 #   ./testar-inf-repos.sh --sem-i1        sem o I1 (que usa a GPU e a build builds/i1)
 #   ./testar-inf-repos.sh i2 i9           só os citados (i1 i2 i3 i4 i6 i7 i8 i9)
+# O que vem do clone tem de estar no commit do inf.env (os clones de SRC_DIR são de todas as builds):
+# fora dele, o item FALHA e pede builds/inf/preparar-codigo.sh.
 # Resultado: validacao/inf/resultados/inf-repos-<data>.txt (+ pasta com a saída de cada suíte).
 # Código de saída: 0 se nenhum item falhou.
 set -euo pipefail
@@ -41,7 +43,7 @@ TODOS=(i1 i2 i3 i4 i6 i7 i8 i9)
 ALVOS=()
 while (( $# )); do
   case "$1" in
-    -h|--help) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --sem-i1)  SEM_I1=1 ;;
     i1|i2|i3|i4|i6|i7|i8|i9) ALVOS+=("$1") ;;
     i5) erro "o I5 está fora da build inf (24/11/2026)" ;;
@@ -118,6 +120,17 @@ tem_imagem() {   # tem_imagem <item> <imagem>
   item "$1" FALHOU "a imagem $2 não existe nesta placa (rode builds/inf/inf.sh subir)"; return 1
 }
 
+# O clone (de onde vêm testes e dados por volume) está no commit da imagem? Outra build pode ter
+# movido o clone compartilhado de SRC_DIR para o commit dela.
+clone_no_commit() {   # clone_no_commit <item> <repo>; devolve 1 (e registra FALHOU) se não estiver
+  local var esperado atual
+  var="${2^^}_REF"; esperado=${!var:-}
+  atual=$(git -C "$SRC_DIR/$2" rev-parse HEAD 2>/dev/null || echo "sem clone")
+  [[ -n "$esperado" && "$atual" == "$esperado" ]] && return 0
+  item "$1" FALHOU "o clone $SRC_DIR/$2 está em ${atual:0:12}, não no ${esperado:0:12} do inf.env (rode builds/inf/preparar-codigo.sh)"
+  return 1
+}
+
 # Resumo de uma saída de unittest ou de pytest: "total ok falhas erros pulados"
 resumo() {
   python3 - "$1" <<'PY'
@@ -168,24 +181,24 @@ if quer i1; then
   else item R-I1 FALHOU "testar-i1-servico.sh terminou com código $cod: ${resumo_i1#Resumo: } (veja $SAIDA/i1.txt)"; fi
 fi
 
-# ---- I2: os testes já estão na imagem (/app/I2/tests) -------------------------------------------
+# ---- I2: I2/tests do clone (o .dockerignore do I2 não deixa os testes entrarem na imagem) --------
 if quer i2; then
   etapa "R-I2 I2/tests (unittest) na imagem do serviço i2"
   img=$(imagem i2)
-  if tem_imagem R-I2 "$img"; then
+  if tem_imagem R-I2 "$img" && clone_no_commit R-I2 i2; then
     rodar_suite R-I2 "I2/tests na $img" "$SAIDA/i2.txt" -- --network none \
+      -v "$SRC_DIR/i2/I2/tests:/app/I2/tests:ro" \
       --entrypoint python "$img" -m unittest discover -s I2/tests -t I2 -v
   fi
 fi
 
-# ---- I3: testes na imagem; dados/ (imagem da quadra do A4) vem do clone ---------------------------
+# ---- I3: I3/tests e dados/ do clone (o .dockerignore do I3 tira os dois da imagem) ----------------
 if quer i3; then
   etapa "R-I3 I3/tests (unittest) na imagem do serviço i3"
   img=$(imagem i3)
-  if tem_imagem R-I3 "$img"; then
-    [[ -d "$SRC_DIR/i3/dados" ]] || aviso_dados=" (sem $SRC_DIR/i3/dados: os testes da quadra devem falhar)"
-    rodar_suite R-I3 "I3/tests na $img${aviso_dados:-}" "$SAIDA/i3.txt" -- --network none \
-      -v "$SRC_DIR/i3/dados:/app/dados:ro" \
+  if tem_imagem R-I3 "$img" && clone_no_commit R-I3 i3; then
+    rodar_suite R-I3 "I3/tests na $img" "$SAIDA/i3.txt" -- --network none \
+      -v "$SRC_DIR/i3/I3/tests:/app/I3/tests:ro" -v "$SRC_DIR/i3/dados:/app/dados:ro" \
       --entrypoint python "$img" -m unittest discover -s I3/tests -t I3 -v
   fi
 fi
@@ -194,7 +207,7 @@ fi
 if quer i4; then
   etapa "R-I4 tests/ (pytest) na imagem do serviço i4"
   img=$(imagem i4)
-  if tem_imagem R-I4 "$img"; then
+  if tem_imagem R-I4 "$img" && clone_no_commit R-I4 i4; then
     if [[ -d "$SRC_DIR/i4/tests" ]]; then
       rodar_suite R-I4 "tests/ do I4 na $img (+ pytest)" "$SAIDA/i4.txt" -- \
         -v "$SRC_DIR/i4/tests:/app/tests:ro" -w /app \
@@ -225,7 +238,7 @@ fi
 if quer i9; then
   etapa "R-I9 I9/tests (unittest) na imagem do serviço i9"
   img=$(imagem i9)
-  if tem_imagem R-I9 "$img"; then
+  if tem_imagem R-I9 "$img" && clone_no_commit R-I9 i9; then
     if [[ -d "$SRC_DIR/i9/I9/tests" ]]; then
       rodar_suite R-I9 "I9/tests na $img" "$SAIDA/i9.txt" -- --network none \
         -v "$SRC_DIR/i9/I9/tests:/app/tests:ro" -w /app \

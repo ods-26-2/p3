@@ -52,7 +52,7 @@ relatorio() {
   local cod=$?
   (( ${#ITENS[@]} )) || return "$cod"
   {
-    echo "Testes do I1 no serviço da build do A8 — $(date '+%Y-%m-%d %H:%M:%S %z')"
+    echo "Testes do I1 no serviço da build $NOME_BUILD — $(date '+%Y-%m-%d %H:%M:%S %z')"
     echo "Placa: $(uname -n) · $(tr -d '\0' </proc/device-tree/model 2>/dev/null || echo '?')"
     echo "Serviço: builds/$NOME_BUILD → i1 · imagem ${IMG:-?}"
     echo "Configuração usada (do docker compose config):"

@@ -327,7 +327,7 @@ P2 é biblioteca dentro das imagens de inferência, não um container. "Opcionai
 | INV-1 (A4) | Sem Dockerfile no back e no front |
 | VER-3 (I9) | Sem Dockerfile; dataset de 323 MB no repositório |
 | MOD-1 (B5) | (17/11) O pacote `app-epi` 1.0.0 (pessoa, capacete, colete) já está na develop do I1 e no B5: o A5 usa; o A3 ainda usa o de placas (pode passar a usar o `app-epi` pela classe `pessoa`). Falta engine compilada publicada (`p2-build`) |
-| INV-2 (I4, S6) | Repo `s6` vazio (S6 está em `i4/s6_synthesis`); I4 ao vivo depende de servidor C++ próprio (`503f64b` já o containeriza); `webcam.py` só abre câmera por índice (a build inf manda o vídeo com script do P3); `mediapipe` sem versão fixa |
+| INV-2 (I4, S6) | Repo `s6` vazio (S6 está em `i4/s6_synthesis`); I4 ao vivo depende de servidor C++ próprio (`503f64b` já o containeriza); `webcam.py` só abre câmera por índice (a build inf manda o vídeo com script do P3); `mediapipe` sem versão fixa; `requirements-i4.txt` fixa `numpy<2` mas deixa `pyarrow>=15` sem teto: o pip instala o 26.0.1, que exige numpy 2 e não importa (3 testes de parquet falham na Jetson, 24/11; o ao vivo não usa parquet). Sugerir teto, ex. `pyarrow==17.0.0` como no S6 do A6 |
 | VER-4 (A7, I5) | I5 `d7b1379` em CPU na build inf (P2 0.2.0a3 já traz Whisper: caminho para a GPU, a avaliar); `Dockerfile.jetson` usa `l4t-pytorch:r35.2.1` (JetPack 5; a placa é JetPack 6.2.1); broker do consumidor do P5 só pelo YAML (padrão da nuvem fixo); I5 com `float16` padrão (GPU); A7 escuta `ods.s5.event.metrics` (6c: `ods.s5.event_metrics`) |
 | SIS-2 (P5, P7) | Só scripts de hardware, sem Kafka: A6/A7 ficam sem P5 e A1/A4 sem P7 |
 

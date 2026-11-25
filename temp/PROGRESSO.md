@@ -469,3 +469,12 @@
 - Validado: bash -n, shellcheck, simulação com docker falso (unittest e pytest, sucesso e falha; extração dos testes com problema corrigida). I9 local: 130 testes OK (Python 3.10). GUIA seção 4.
 - Próximo: commit; na placa: ./testar-inf-repos.sh (depois do ./inf.sh subir).
 - Commit do testar-inf-repos.sh pedido pelo usuário.
+
+### 2026-11-24 22:28 — Jetson: 1ª execução do testar-inf-repos.sh
+- R-I1 PASSOU (45/46, CMD -fp16), R-I8 PASSOU (139), R-I9 PASSOU (130), R-I6/R-I7 AVISO.
+- R-I2/R-I3 FALHOU: .dockerignore das equipes tira I2/tests e I3/tests (e dados/ do I3) da imagem → erro meu (afirmei que estavam na imagem). Corrigido: testes do clone por volume.
+- R-I4: 74 passed, 3 failed (parquet: pandas não acha pyarrow na imagem, embora o requirements-i4 peça pyarrow>=15; existe roda cp311 aarch64). Não afeta o ao vivo. Diagnóstico pedido ao usuário (pip show / import pyarrow).
+- Script: clone_no_commit (item FALHA se o clone de SRC_DIR não está no <REPO>_REF do inf.env). testar-i1-servico.sh: título dizia "build do A8" sempre → usa $NOME_BUILD.
+- Evidência: validacao/inf/evidencias/inf-repos-20261124-2228.txt. Validado: shellcheck, simulação (inclusive clone fora do commit).
+- Diagnóstico I4 (Jetson): pyarrow 26.0.1 instalado; import falha "requires NumPy 2.0 or newer, found 1.26.4". Causa: requirements-i4 numpy<2 + pyarrow>=15 sem teto (pyarrow não declara numpy, o pip não acusa). Pendência INV-2 (sugestão: pyarrow==17.0.0, como o S6 do A6). Sem contorno na build: o ao vivo não usa parquet.
+- Commit pedido pelo usuário (correção I2/I3, clone_no_commit, evidência, pyarrow).
