@@ -127,8 +127,10 @@ pedir_i1() {
   echo "  acompanhe: docker logs -f --tail 20 ${c:-<container do i1>}"
 }
 
+# Entrada vazia (< /dev/null): com -T a entrada deixa de ser terminal, e o I3 (--linhas) passa a ler
+# um csv opcional do stdin até o fim; sem o /dev/null ele esperava o teclado para sempre (Jetson, 24/11).
 rodar() {   # rodar <perfil> <serviço>
-  dc --profile "$1" run --rm -T "$2"
+  dc --profile "$1" run --rm -T "$2" < /dev/null
 }
 
 # ---------------------------------------------------------------- contagem por tópico

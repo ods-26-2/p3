@@ -4,7 +4,7 @@
 - Aplicação em foco: build "inf" (todas as inferências I1–I9; uma pasta, uma seção do compose por I; I1 = builds/i1)
 - Fase: build na Jetson parou por disco cheio na última imagem (I7); I7 trocado para GPU (ods-i7-gpu), validado só fora da placa
 - Último resultado: todas as imagens da inf na placa menos a do I7; simulação do T-I7 GPU ok
-- Próximo passo: commit (I7 GPU + I5 fora); na placa: rmi ods-i5-cpu, ods-i5:d7b1379, ods-aceite-i5:1 (manter ods-i5-gpu), builder prune, git pull, ./inf.sh subir (só constrói ods-i7-gpu), ./inf.sh testar
+- Próximo passo: na placa ./inf.sh status e ./inf.sh testar (todas as imagens da inf existem, inclusive ods-i7-gpu; suítes das equipes já rodadas: 5 PASSOU, I4 pyarrow, I6/I7 sem suíte)
 - Bloqueios / perguntas abertas ao usuário: Kafka da nuvem (TRA-1) desligado; imagens ods-i5* d7b1379 de quem?; dica "../ods.sh trocar" da lib para build permanente; A2 segue sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
@@ -478,3 +478,11 @@
 - Evidência: validacao/inf/evidencias/inf-repos-20261124-2228.txt. Validado: shellcheck, simulação (inclusive clone fora do commit).
 - Diagnóstico I4 (Jetson): pyarrow 26.0.1 instalado; import falha "requires NumPy 2.0 or newer, found 1.26.4". Causa: requirements-i4 numpy<2 + pyarrow>=15 sem teto (pyarrow não declara numpy, o pip não acusa). Pendência INV-2 (sugestão: pyarrow==17.0.0, como o S6 do A6). Sem contorno na build: o ao vivo não usa parquet.
 - Commit pedido pelo usuário (correção I2/I3, clone_no_commit, evidência, pyarrow).
+- Jetson (2ª execução, i2 i3, script b879079): R-I2 35 OK, R-I3 33 OK. Placar das suítes: PASSOU 5 (I1 I2 I3 I8 I9), FALHOU 1 (I4 pyarrow), AVISO 2 (I6 I7). Evidência e guia atualizados (sem commit).
+- Jetson: ods-i7-gpu:1441bbb construída em 24/11 21:56, 1,86 GB (tamanho lógico; camadas da base l4t-tensorrt divididas com o ods-i1-gpu). Disco: 6,4 GB livres (89%). Próximo: ./inf.sh status e ./inf.sh testar.
+
+### 2026-11-25 — Jetson: ./inf.sh testar travou no I3
+- Causa: rodar() usa "docker compose run -T"; o stdin continua ligado ao terminal, mas não é TTY; o I3 com --linhas faz sys.stdin.read() quando stdin não é TTY (run_calibracao.py:115) e espera EOF para sempre. O HOW_TO_RUN do I3 usa < /dev/null.
+- Correção: rodar() com < /dev/null (todos os disparos). shellcheck ok. Simulação não pegava (docker falso não lê stdin).
+- Na placa: docker rm -f ods-inf-i3-run-117239d82196; depois do commit/pull, ./inf.sh testar de novo.
+- Commit pedido pelo usuário (rodar com < /dev/null + evidência/guia da 2ª execução das suítes).

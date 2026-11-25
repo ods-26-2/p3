@@ -24,3 +24,10 @@ Diagnóstico do I4 (Jetson, mesma noite): pip show pyarrow → 26.0.1; import py
 Próximo: rodar de novo com o script corrigido (I2/I3). Comando do diagnóstico do I4:
   docker run --rm --entrypoint sh ods-i4:503f64b304e3ae0b0a248671bf03c8b008dae75d -c \
     'pip show pyarrow; python -c "import pyarrow; print(pyarrow.__version__)"'
+
+2ª execução, só I2 e I3, com o script corrigido (commit b879079; testes do clone por volume):
+R-I2  PASSOU — 35 testes OK (ods-i2:5283d60), 2,1 s
+R-I3  PASSOU — 33 testes OK (ods-i3:c3d876e, dados/ do clone), 41 s
+
+Placar consolidado das suítes na Jetson (24/11/2026): PASSOU 5 (I1, I2, I3, I8, I9), FALHOU 1 (I4: 3 de
+77, pyarrow × numpy, fora do caminho ao vivo), AVISO 2 (I6, I7 sem suíte).

@@ -102,8 +102,8 @@ cd /opt/ods/p3/validacao/inf
 | Item | Suíte | Como roda | Esperado |
 |---|---|---|---|
 | R-I1 | `I1/tests` + CMD da imagem | `validacao/i1/testar-i1-servico.sh` (build `i1`) | PASSOU (Jetson 24/11: 45 de 46, o `test_05` precisa do `ultralytics`; CMD com `-fp16`) |
-| R-I2 | `I2/tests` (unittest) | do clone por volume (o `.dockerignore` do I2 tira os testes da imagem) | PASSOU (o CI da equipe roda a mesma suíte) |
-| R-I3 | `I3/tests` (unittest) | testes e `dados/` do clone por volume (idem) | PASSOU (idem) |
+| R-I2 | `I2/tests` (unittest) | do clone por volume (o `.dockerignore` do I2 tira os testes da imagem) | PASSOU (Jetson 24/11: 35 OK) |
+| R-I3 | `I3/tests` (unittest) | testes e `dados/` do clone por volume (idem) | PASSOU (Jetson 24/11: 33 OK) |
 | R-I4 | `tests/` (pytest) | do clone por volume; `pytest` instalado no container (precisa de rede) | Jetson 24/11: 74 de 77; os 3 que gravam parquet falham: o pip instala o `pyarrow` 26, que exige numpy 2, e o I4 fixa numpy < 2 (não afeta o ao vivo; recado à INV-2) |
 | R-I6, R-I7 | — | o repositório não tem suíte | AVISO |
 | R-I8 | contrato e publicador (pytest) | comando padrão da imagem `ods-i8-publisher` | PASSOU (Jetson 24/11: 139 passed) |
