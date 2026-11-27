@@ -48,7 +48,7 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 
 | Build | Sobe por padrão | Sob demanda | Portas | Guia |
 |---|---|---|---|---|
-| `inf/` | `i2`, `i4-server` + `i4` (Libras ao vivo), `i6` (QR, vídeo em laço), `i9` | `./inf.sh i1 [EQUIPE]` (pedido ao I1 de `i1/`) · `i3` (calibração da quadra do A4) · `i4` (vídeo como webcam) · `i7` (placas em vídeo, detector na GPU) · `i8` (eventos de exemplo) · `./inf.sh testar` dispara todas e confere cada tópico | 18080 (servidor do I4, só `127.0.0.1` por padrão) | [`validacao/inf/GUIA-BUILD-INF.md`](../validacao/inf/GUIA-BUILD-INF.md) |
+| `inf/` | `i6` (QR, vídeo em laço), `i9` — sobre a `inf_a4` (I1 e I2 dela, desde 27/11); I4 e I5 fora | `./inf.sh i1 [EQUIPE]` (pedido ao I1 da `inf_a4`) · `i3` (calibração da quadra do A4) · `i4` (vídeo como webcam) · `i7` (placas em vídeo, detector na GPU) · `i8` (eventos de exemplo) · `./inf.sh testar` dispara todas e confere cada tópico | 18080 (servidor do I4, só `127.0.0.1` por padrão) | [`validacao/inf/GUIA-BUILD-INF.md`](../validacao/inf/GUIA-BUILD-INF.md) |
 
 Sem `i1` próprio: o I1 é o de `i1/` (tem de estar de pé e no mesmo Kafka; o `inf.sh` confere). Entra no
 `./ods.sh trocar inf` como as aplicações. GPU: o I1 e o detector do I7 (mesma engine `app-plates` do I1); o resto em CPU.

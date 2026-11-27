@@ -2,15 +2,14 @@
 # inf.sh — build "inf": todas as inferências (I1–I9) numa build só (P3 / SIS-1).
 #
 #   ./inf.sh               o mesmo que ./inf.sh subir
-#   ./inf.sh subir         confere a placa e o I1, baixa o código, constrói o que falta (em etapas,
-#                          com limpeza) e sobe os contínuos: i2, i4-server, i4, i6, i9
+#   ./inf.sh subir         confere a placa e o I1/I2 da inf_a4, baixa o código, constrói o que falta
+#                          (em etapas, com limpeza) e sobe os contínuos: i6, i9
 #   ./inf.sh subir --reconstruir   reconstrói todas as imagens
-#   ./inf.sh i1 [EQUIPE] [QUADROS] pede detecções ao I1 (builds/i1) por ods.i1.command
+#   ./inf.sh i1 [EQUIPE] [QUADROS] pede detecções ao I1 da inf_a4 por ods.i1.command
 #                          (padrão: INF_I1_EQUIPE e INF_I1_QUADROS do inf.env; equipes do I1:
 #                          VER5 placas, VER3/VER6 EPI, VER1 indústria, INV1 esporte)
 #   ./inf.sh i3            calibração da quadra do A4 → ods.i3.calibration + ods.artifact.published
-#   ./inf.sh i4            manda I4_VIDEO ao servidor do I4 (como a webcam) → ods.i4.*
-#   (I5 fora da build desde 24/11/2026: ver o docker-compose.yml)
+#   (I4 fora da build desde 27/11/2026 e I5 desde 24/11/2026: ver o docker-compose.yml)
 #   ./inf.sh i7            lê placas de VIDEO_DIR/I7_VIDEO → ods.i7.plate_read (detector na GPU,
 #                          com a engine app-plates que o I1 compila)
 #   ./inf.sh i8            publica os 4 eventos de exemplo do I8 → ods.industria.defeito_classificado
@@ -18,7 +17,10 @@
 #   ./inf.sh testar        dispara todas e confere cada tópico → resultados/aceite-inf-*.txt
 #   ./inf.sh log <serviço> acompanha o log de um serviço (Ctrl+C para sair)
 #   ./inf.sh status        containers, I1, memória, disco e Kafka
-#   ./inf.sh parar         derruba a build (o I1 continua de pé: é de builds/i1)
+#   ./inf.sh parar         derruba a build (o I1 e o I2 continuam de pé: são da inf_a4)
+#
+# Base (27/11/2026): o I1 e o I2 são os da build inf_a4, que tem de estar de pé
+# (../inf_a4/inf_a4.sh). O I1 permanente (builds/i1) fica parado.
 #
 # Para remover a build da placa: ./limpar.sh (veja ./limpar.sh --help)
 # Variáveis opcionais: MIN_LIVRE_GB (padrão 4), ESPERA_S (padrão 300)
@@ -26,7 +28,9 @@ APP=inf
 SEGREDOS=()
 # Menores primeiro, as maiores (torch) por último e sozinhas: o disco da Jetson é pequeno.
 # I5 fora (24/11/2026): para voltar, "i5" de novo entre "i4" e "i7"
-ETAPAS=("i2 i3 i6 i9 i4-video" "i8" "i4-server" "i4" "i7")
+# I2 fora (27/11/2026): é o da inf_a4
+# I4 fora (27/11/2026): para voltar, ("i3 i6 i9 i4-video" "i8" "i4-server" "i4" "i7")
+ETAPAS=("i3 i6 i9" "i8" "i7")
 ONESHOT=(kafka-topicos)
 
 # shellcheck source=../comum/lib.sh
@@ -34,30 +38,41 @@ source "$(dirname "$(readlink -f "$0")")/../comum/lib.sh"
 
 TOPICOS_RE='^(ods\.i[0-9]\..*|ods\.p5\.audio_chunk|ods\.artifact\.published|ods\.industria\.defeito_classificado)$'
 
-# ---------------------------------------------------------------- I1 (outra build)
+# ---------------------------------------------------------------- I1 e I2 (build inf_a4)
 
-container_i1() {
-  docker ps -aq --filter label=com.docker.compose.project=ods-i1 \
-    --filter label=com.docker.compose.service=i1 | head -1
+BASE_PROJETO=ods-inf_a4
+container_de() {   # container_de <projeto> <serviço>
+  docker ps -aq --filter label=com.docker.compose.project="$1" \
+    --filter label=com.docker.compose.service="$2" | head -1
 }
+container_i1() { container_de "$BASE_PROJETO" i1; }
+container_i2() { container_de "$BASE_PROJETO" i2; }
 
-# O I1 é o de builds/i1. Esta build só funciona com ele de pé e no MESMO broker.
+# O I1 e o I2 são os da inf_a4 (27/11/2026): de pé e no MESMO broker. O I1 permanente (builds/i1)
+# no mesmo broker seria um segundo orquestrador (a inf_a4 já recusa subir com ele).
 checar_i1() {
-  local c estado broker_i1
+  local c estado broker_i1 c2 cp
   c=$(container_i1)
   if [[ -z "$c" ]]; then
-    aviso "o I1 (builds/i1) não está nesta placa: I2 e I9 sobem, mas ficam sem detecções.
-  Para subir: ../i1/i1.sh"
+    aviso "o I1 da inf_a4 não está nesta placa: I9 sobe, mas fica sem detecções.
+  Para subir: ../inf_a4/inf_a4.sh  (ou ../ods.sh trocar inf, que sobe as duas)"
     return 0
   fi
   estado=$(docker inspect -f '{{.State.Status}}' "$c")
-  [[ "$estado" == running ]] || aviso "o I1 (builds/i1) está $estado. Para subir: ../i1/i1.sh"
+  [[ "$estado" == running ]] || aviso "o I1 da inf_a4 está $estado. Para subir: ../inf_a4/inf_a4.sh"
   broker_i1=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | sed -n 's/^ODS_KAFKA_BROKER=//p')
   if [[ -n "$broker_i1" && "$broker_i1" != "$KAFKA_BROKER" ]]; then
-    erro "o I1 usa o Kafka $broker_i1 e esta build, $KAFKA_BROKER: os pedidos não chegariam.
-  Use o mesmo broker nas duas (inf.local.env aqui, ou i1.local.env em ../i1)."
+    erro "o I1 da inf_a4 usa o Kafka $broker_i1 e esta build, $KAFKA_BROKER: os pedidos não chegariam.
+  Use o mesmo broker nas duas (inf.local.env aqui, ou inf_a4.local.env em ../inf_a4)."
   fi
-  ok "I1 (builds/i1) $estado, no mesmo Kafka ($KAFKA_BROKER)"
+  ok "I1 da inf_a4 $estado, no mesmo Kafka ($KAFKA_BROKER)"
+  c2=$(container_i2)
+  if [[ -n "$c2" && "$(docker inspect -f '{{.State.Status}}' "$c2")" == running ]]; then ok "I2 da inf_a4 rodando"
+  else aviso "o I2 da inf_a4 não está rodando: ods.i2.tracks fica parado (../inf_a4/inf_a4.sh)"; fi
+  cp=$(container_de ods-i1 i1)
+  [[ -z "$cp" || "$(docker inspect -f '{{.State.Status}}' "$cp")" != running ]] \
+    || aviso "o I1 permanente (builds/i1) também está de pé: pare-o (../i1/i1.sh parar), são dois orquestradores"
+  return 0
 }
 
 # ---------------------------------------------------------------- conferências
@@ -67,7 +82,7 @@ checar_gpu_i7() {
   docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"' \
     || erro "o Docker desta placa não tem o runtime nvidia; o I7 (TensorRT) não roda sem ele"
   [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]] \
-    || erro "falta a engine $ENGINES_DIR/app-plates-1.0.0 do I7 (a mesma do I1). Compile com: ../i1/i1.sh engines"
+    || erro "falta a engine $ENGINES_DIR/app-plates-1.0.0 do I7 (a mesma do I1). Compile com: ../inf_a4/inf_a4.sh engines"
 }
 
 checar_entradas() {
@@ -77,9 +92,9 @@ checar_entradas() {
   Uma vez só: sudo chown $(id -un) $VIDEO_DIR"
   entrada_arquivo "$VIDEO_DIR/$I7_VIDEO" "vídeo do I7" "o ./inf.sh i7 não terá o que ler"
   if [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]]; then ok "engine do I7 (GPU): $ENGINES_DIR/app-plates-1.0.0"
-  else aviso "sem a engine $ENGINES_DIR/app-plates-1.0.0: o ./inf.sh i7 não roda até ../i1/i1.sh engines"; fi
+  else aviso "sem a engine $ENGINES_DIR/app-plates-1.0.0: o ./inf.sh i7 não roda até ../inf_a4/inf_a4.sh engines"; fi
   # I4_VIDEO e I5_AUDIO_DIR ficam nos clones: no primeiro "subir" ainda não existem.
-  [[ -d "$SRC_DIR/i4" ]] && entrada_arquivo "$I4_VIDEO" "vídeo do I4" "o ./inf.sh i4 não terá o que mandar"
+  # I4 fora: [[ -d "$SRC_DIR/i4" ]] && entrada_arquivo "$I4_VIDEO" "vídeo do I4" "o ./inf.sh i4 não terá o que mandar"
   # I5 fora: [[ -d "$SRC_DIR/i5" ]] && entrada_arquivo "$I5_AUDIO_DIR/$I5_AUDIO" "áudio do I5" "o ./inf.sh i5 não terá o que mandar"
   livre_ram_mb >/dev/null
   return 0
@@ -105,9 +120,9 @@ pos_subida() {
   gerar_video_qr
   entrada_arquivo "$VIDEO_DIR/$I6_VIDEO" "vídeo do I6 (relido em laço)" "o I6 fica tentando abrir"
   echo
-  echo "Contínuos de pé. Para disparar cada inferência: ./inf.sh i1 | i3 | i4 | i7 | i8"
+  echo "Contínuos de pé. Para disparar cada inferência: ./inf.sh i1 | i3 | i7 | i8"
   echo "Tudo de uma vez, conferindo os tópicos: ./inf.sh testar"
-  echo "Webcam no I4: python webcam.py --url ws://<placa>:18080/ws/video (I4_SERVER_BIND=$I4_SERVER_BIND)"
+  # I4 fora: echo "Webcam no I4: python webcam.py --url ws://<placa>:18080/ws/video (I4_SERVER_BIND=$I4_SERVER_BIND)"
 }
 
 # ---------------------------------------------------------------- disparos
@@ -118,8 +133,12 @@ pedir_i1() {
   local equipe=${1:-$INF_I1_EQUIPE} quadros=${2:-$INF_I1_QUADROS} sid=${3:-}
   [[ "$quadros" =~ ^[0-9]+$ ]] || erro "QUADROS deve ser um número (recebi '$quadros')"
   sid=${sid:-inf-$equipe-$(date +%H%M%S)}
-  local json="{\"action\": \"START\", \"squad\": \"$equipe\", \"source_id\": \"$sid\", \"max_frames\": $quadros}"
-  [[ -n "$(container_i1)" ]] || aviso "o I1 (builds/i1) não está nesta placa: o pedido fica no tópico até ele subir"
+  # O I1 da inf_a4 procura <EQUIPE>.mp4 na pasta da SIS-2, que não tem todas as equipes (ex.: VER3).
+  # Com o vídeo do P3 em VIDEO_DIR (../i1/i1.sh videos), o pedido aponta para ele (/videos-p3 no I1).
+  local fonte=""
+  [[ -e "$VIDEO_DIR/$equipe.mp4" ]] && fonte=", \"source\": \"/videos-p3/$equipe.mp4\""
+  local json="{\"action\": \"START\", \"squad\": \"$equipe\", \"source_id\": \"$sid\", \"max_frames\": $quadros$fonte}"
+  [[ -n "$(container_i1)" ]] || aviso "o I1 da inf_a4 não está nesta placa: o pedido fica no tópico (o I1 lê só pedidos novos)"
   echo "$json" | kafka kafka-console-producer --bootstrap-server "$KAFKA_BROKER" --topic "$I1_COMMAND_TOPIC" 2>/dev/null \
     || erro "não consegui publicar em $I1_COMMAND_TOPIC ($KAFKA_BROKER)"
   ok "pedido ao I1: $json"
@@ -172,11 +191,13 @@ esperar_topico() {   # esperar_topico <tópico> <segundos>: até chegar mensagem
 testar() {
   etapa "Conferindo"
   # I5 fora: voltar a conferir o i5 aqui
-  aceite_conferir i2 i4-server i4 i6 i9
+  # I2 fora (27/11/2026): o da inf_a4, conferido no checar_i1
+  # I4 fora (27/11/2026): aceite_conferir i4-server i4 i6 i9
+  aceite_conferir i6 i9
   checar_i1
   local c1; c1=$(container_i1)
   [[ -n "$c1" && "$(docker inspect -f '{{.State.Status}}' "$c1")" == running ]] \
-    || erro "o I1 (builds/i1) não está rodando; suba com ../i1/i1.sh antes do teste"
+    || erro "o I1 da inf_a4 não está rodando; suba com ../inf_a4/inf_a4.sh antes do teste"
   local ts; ts=$(date +%Y%m%d-%H%M%S)
   local rel="resultados/aceite-inf-$ts.txt"
   # Contagens em resultados/ (o trap de saída é da lib); apagadas no fim
@@ -194,9 +215,9 @@ testar() {
   echo "-- I3";  rodar i3 i3  || cod_i3=$?
   echo "-- I8";  rodar i8 i8  || cod_i8=$?
   # I5 fora: echo "-- I5 (áudio como P5)"; rodar i5 i5-audio || cod_i5=$?
-  echo "-- I4 (vídeo como webcam)"; rodar i4 i4-video || cod_i4=$?
+  # I4 fora: echo "-- I4 (vídeo como webcam)"; rodar i4 i4-video || cod_i4=$?
 
-  etapa "Esperando o I1/I9 e o processamento do I4"
+  etapa "Esperando o I1/I9"
   esperar_topico ods.i9.ppe_compliance 180 || true
   sleep 30
   # Só depois do I1: os dois usam a GPU, que divide a RAM da placa
@@ -222,15 +243,17 @@ testar() {
   else registrar T-I1M FALHOU "I1 sem reinício nem OUT_OF_MEMORY" "RestartCount $restarts_antes → $restarts_depois; OUT_OF_MEMORY: $oom"; fi
   d=$(delta ods.i2.tracks)
   if (( d > 0 )); then registrar T-I2 PASSOU "I2 trilhas" "$d mensagens"
-  else registrar T-I2 FALHOU "I2 trilhas" "nenhuma (dc logs i2)"; fi
+  else registrar T-I2 FALHOU "I2 trilhas" "nenhuma (../inf_a4/inf_a4.sh log i2)"; fi
   d=$(delta ods.artifact.published)
   if (( cod_i3 == 0 && d > 0 )); then registrar T-I3 PASSOU "I3 calibração anunciada" "artifact.published +$d, calibration +$(delta ods.i3.calibration)"
   else registrar T-I3 FALHOU "I3 calibração anunciada" "código $cod_i3, artifact.published +$d"; fi
-  d=$(delta ods.i4.sign)
-  if (( cod_i4 != 0 )); then registrar T-I4 FALHOU "I4 sinais" "envio do vídeo terminou com código $cod_i4"
-  elif (( d > 0 )); then registrar T-I4 PASSOU "I4 sinais" "sign +$d, keypoints +$(delta ods.i4.keypoints), facial_marker +$(delta ods.i4.facial_marker)"
-  elif (( $(delta ods.i4.keypoints) > 0 )); then registrar T-I4 AVISO "I4 sinais" "sem sinal reconhecido; keypoints +$(delta ods.i4.keypoints)"
-  else registrar T-I4 FALHOU "I4 sinais" "nada publicado (dc logs i4 i4-server)"; fi
+  # I4 fora da build (27/11/2026): sem disparo nem conferência
+  registrar T-I4 AVISO "I4 sinais" "I4 fora da build inf (comentado no docker-compose.yml)"
+  # d=$(delta ods.i4.sign)
+  # if (( cod_i4 != 0 )); then registrar T-I4 FALHOU "I4 sinais" "envio do vídeo terminou com código $cod_i4"
+  # elif (( d > 0 )); then registrar T-I4 PASSOU "I4 sinais" "sign +$d, keypoints +$(delta ods.i4.keypoints), facial_marker +$(delta ods.i4.facial_marker)"
+  # elif (( $(delta ods.i4.keypoints) > 0 )); then registrar T-I4 AVISO "I4 sinais" "sem sinal reconhecido; keypoints +$(delta ods.i4.keypoints)"
+  # else registrar T-I4 FALHOU "I4 sinais" "nada publicado (dc logs i4 i4-server)"; fi
   # I5 fora da build (24/11/2026): sem disparo nem conferência
   registrar T-I5 AVISO "I5 transcrição" "I5 fora da build inf (comentado no docker-compose.yml)"
   # d=$(delta ods.i5.transcript)
@@ -288,10 +311,12 @@ status() {
   echo
   local c1; c1=$(container_i1)
   if [[ -n "$c1" ]]; then
-    echo "I1 (builds/i1): $(docker inspect -f '{{.State.Status}}, {{.RestartCount}} reinícios' "$c1")"
+    echo "I1 (inf_a4): $(docker inspect -f '{{.State.Status}}, {{.RestartCount}} reinícios' "$c1")"
   else
-    echo "I1 (builds/i1): ausente (../i1/i1.sh)"
+    echo "I1 (inf_a4): ausente (../inf_a4/inf_a4.sh)"
   fi
+  local c2; c2=$(container_i2)
+  echo "I2 (inf_a4): $([[ -n "$c2" ]] && docker inspect -f '{{.State.Status}}' "$c2" || echo 'ausente')"
   local ids
   mapfile -t ids < <(docker ps -q --filter label=com.docker.compose.project=ods-inf; [[ -n "$c1" ]] && echo "$c1")
   (( ${#ids[@]} )) && docker stats --no-stream --format '  {{.Name}}: {{.MemUsage}}' "${ids[@]}" 2>/dev/null
@@ -310,7 +335,8 @@ I1_COMMAND_TOPIC=${I1_COMMAND_TOPIC:-ods.i1.command}
 case "${1:-subir}" in
   i1)     shift; checar_kafka; pedir_i1 "$@" ;;
   i3)     rodar i3 i3 ;;
-  i4)     rodar i4 i4-video ;;
+  # I4 fora: i4)     rodar i4 i4-video ;;
+  i4)     erro "o I4 está fora da build inf (27/11/2026); veja o docker-compose.yml" ;;
   # I5 fora: i5)     rodar i5 i5-audio; echo "Transcrição em ods.i5.transcript em alguns segundos: ./inf.sh log i5" ;;
   i5)     erro "o I5 está fora da build inf (24/11/2026); veja o docker-compose.yml" ;;
   i7)     checar_gpu_i7; rodar i7 i7 ;;

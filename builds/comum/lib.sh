@@ -376,12 +376,12 @@ remover_containers() {
   fi
 }
 
-remover_imagens() {
-  local manter=$1 img
+remover_imagens() {   # remover_imagens "<app> [<app>…]" (as builds cujas imagens ficam)
+  local manter=$1 img m
   local -A protegida=()
-  if [[ -n "$manter" ]]; then
-    while read -r img; do [[ -n "$img" ]] && protegida[$img]=$manter; done < <(imagens_de_outra_app "$manter")
-  fi
+  for m in $manter; do
+    while read -r img; do [[ -n "$img" ]] && protegida[$img]=$m; done < <(imagens_de_outra_app "$m")
+  done
   local perm
   for perm in "${ODS_PERMANENTES[@]}"; do
     [[ "$perm" != "$APP" && -f "$ODS_DIR_BUILDS/$perm/$perm.env" ]] || continue
@@ -431,7 +431,8 @@ limpar_build() {
       --dados)   dados=1 ;;
       --codigo)  codigo=1 ;;
       --tudo)    imagens=1; dados=1; codigo=1 ;;
-      --manter)  shift; manter=${1:?--manter precisa do nome de outra aplicação (ex.: a5)} ;;
+      # Pode repetir: --manter inf --manter inf_a4 (a inf roda sobre a inf_a4)
+      --manter)  shift; manter+="${manter:+ }${1:?--manter precisa do nome de outra aplicação (ex.: a5)}" ;;
       --sim-ao-confirmar-dados) sim=1 ;;
       -h|--help|ajuda) ajuda; return 0 ;;
       *) erro "opção desconhecida: $1 (use --imagens, --dados, --codigo, --tudo, --manter <app>)" ;;

@@ -11,6 +11,8 @@
 #                                  (<app> = a1 … a8, inf: todas as inferências, ou
 #                                  inf_a4: só I1, I2 e I3 para o A4, com I1 próprio no Kafka da nuvem)
 #                                  (a build permanente do I1 fica de pé e com a imagem)
+#                                  "trocar inf" mantém e sobe antes a inf_a4: a inf usa o I1 e o
+#                                  I2 dela (27/11/2026)
 #   ./ods.sh trocar <app> --dados  idem, apagando também os volumes das outras (pede confirmação de cada uma)
 #   ./ods.sh trocar <app> --codigo idem, apagando também os clones que só as outras usam
 #   ./ods.sh subir <app> [--reconstruir]   só sobe <app> (= builds/<app>/<app>.sh subir)
@@ -38,6 +40,9 @@ apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/ "$DIR"/inf_a4/; do d=${d%
 # Serviços permanentes (ex.: i1): aparecem na lista, mas o "trocar" não os remove.
 permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; return 0; }
 
+# Build sobre a qual outra roda: o "trocar" não a remove e a sobe antes (a inf usa o I1 e o I2 da
+# inf_a4 desde 27/11/2026).
+base_de() { case "$1" in inf) echo inf_a4 ;; esac; return 0; }
 checar_app() {
   [[ -n "${1:-}" ]] || erro "informe a aplicação (ex.: a5). Disponíveis: $(apps | tr '\n' ' ')"
   [[ -x "$DIR/$1/$1.sh" ]] || erro "não há build executável em $DIR/$1 ($1.sh)"
@@ -108,17 +113,26 @@ trocar() {
     esac
   done
 
-  echo "== Removendo as outras builds (mantendo as imagens que o $nova usa)"
+  local base; base=$(base_de "$nova")
+  local manter=(--manter "$nova")
+  [[ -n "$base" ]] && manter+=(--manter "$base")
+  echo "== Removendo as outras builds (mantendo as imagens que o $nova${base:+ e a $base} usam)"
   local app removidas=0
   for app in $(apps); do
-    [[ "$app" == "$nova" ]] && continue
+    [[ "$app" == "$nova" || "$app" == "$base" ]] && continue
     presente "$app" || continue
     echo
     echo "-- $app"
-    "$DIR/$app/limpar.sh" --imagens --manter "$nova" "${extras[@]}"
+    "$DIR/$app/limpar.sh" --imagens "${manter[@]}" "${extras[@]}"
     removidas=$((removidas + 1))
   done
   (( removidas )) || ok "nenhuma outra build ocupa a placa"
+
+  if [[ -n "$base" ]]; then
+    echo
+    echo "== Subindo a base do $nova: $base (o que já está de pé não é reconstruído)"
+    "$DIR/$base/$base.sh" subir
+  fi
 
   echo
   echo "== Subindo o $nova"

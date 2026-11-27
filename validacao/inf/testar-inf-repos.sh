@@ -11,7 +11,7 @@
 #
 # Itens:
 #   R-I1  suíte do I1 no serviço i1: validacao/i1/testar-i1-servico.sh (GPU); na inf, o da build
-#         dedicada builds/i1; na inf_a4, o i1 próprio dela
+#         da inf_a4 (desde 27/11/2026 a inf usa o I1 dela; antes, o da build dedicada builds/i1)
 #   R-I2  I2/tests (unittest) do clone por volume na imagem ods-i2 (o .dockerignore do I2 tira os testes)
 #   R-I3  I3/tests (unittest) e dados/ do clone por volume na imagem ods-i3 (idem)
 #   R-I4  tests/ (pytest) do clone por volume na imagem ods-i4; pytest instalado na hora
@@ -22,8 +22,8 @@
 #   (I5 fora da build inf desde 24/11/2026)
 #
 #   ./testar-inf-repos.sh                 todos
-#   ./testar-inf-repos.sh --sem-i1        sem o I1 (que usa a GPU e a build builds/i1)
-#   ./testar-inf-repos.sh i2 i9           só os citados (i1 i2 i3 i4 i6 i7 i8 i9)
+#   ./testar-inf-repos.sh --sem-i1        sem o I1 (que usa a GPU e a build inf_a4)
+#   ./testar-inf-repos.sh i2 i9           só os citados (i1 i2 i3 i6 i7 i8 i9; I4 e I5 fora)
 #   ./testar-inf-repos.sh --build inf_a4 [i1 i2 i3]   imagens da build inf_a4
 #                                         (= builds/inf_a4/inf_a4.sh repos)
 # O que vem do clone tem de estar no commit do <build>.env (os clones de SRC_DIR são de todas as
@@ -42,14 +42,16 @@ if [[ -t 1 ]]; then V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; NC=$'\e[0m'; else V=;
 etapa() { echo; echo "== $*"; }
 erro()  { echo "${R}✘ $*${NC}" >&2; exit 1; }
 
-TODOS=(i1 i2 i3 i4 i6 i7 i8 i9)
+# I4 fora da build inf desde 27/11/2026 (o R-I4 segue abaixo, para quando voltar)
+TODOS=(i1 i2 i3 i6 i7 i8 i9)
 ALVOS=()
 while (( $# )); do
   case "$1" in
     -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --build)   shift; NOME=${1:?--build precisa de inf ou inf_a4} ;;
     --sem-i1)  SEM_I1=1 ;;
-    i1|i2|i3|i4|i6|i7|i8|i9) ALVOS+=("$1") ;;
+    i1|i2|i3|i6|i7|i8|i9) ALVOS+=("$1") ;;
+    i4) erro "o I4 está fora da build inf (27/11/2026)" ;;
     i5) erro "o I5 está fora das builds inf e inf_a4 (24/11/2026)" ;;
     *) erro "opção desconhecida: $1 (veja --help)" ;;
   esac
@@ -186,8 +188,8 @@ rodar_suite() {   # rodar_suite <item> <descrição> <arquivo de saída> -- <doc
 
 # ---- I1 ----------------------------------------------------------------------------------------
 if quer i1; then
-  # Na inf, o I1 é o da build dedicada (builds/i1); na inf_a4, o i1 próprio dela
-  build_i1=i1; [[ "$NOME" == inf_a4 ]] && build_i1=inf_a4
+  # O I1 é o da inf_a4 nas duas builds (desde 27/11/2026 a inf usa o I1 e o I2 dela)
+  build_i1=inf_a4
   etapa "R-I1 Suíte do I1 no serviço i1 da build $build_i1 (validacao/i1/testar-i1-servico.sh)"
   cod=0
   "$P3/validacao/i1/testar-i1-servico.sh" --build "$build_i1" > "$SAIDA/i1.txt" 2>&1 || cod=$?

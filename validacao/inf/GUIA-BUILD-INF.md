@@ -2,6 +2,19 @@
 
 Guia de execução e de teste da build `builds/inf` (P3 · SIS-1). Montada em 24/11/2026.
 
+> **Desde 27/11/2026 a `inf` roda sobre a `inf_a4`** (decisão do usuário): o I1 (orquestrador na GPU)
+> e o I2 são os da `builds/inf_a4`, que tem de estar de pé; a `inf` soma I3 (sob demanda), I4, I6,
+> I7, I8 e I9. O I1 permanente (`builds/i1`) fica parado: dois orquestradores no mesmo Kafka disputam
+> a GPU e os pedidos. `../ods.sh trocar inf` mantém e sobe a `inf_a4` antes. **I4 e I5 fora** da build
+> (I5 desde 24/11, I4 desde 27/11, decisão do usuário; T-I4 e T-I5 saem como AVISO). As imagens do I4
+> já construídas na placa (`ods-i4`, `ods-i4-server`, `ods-i4-video`) não saem com o `limpar.sh`:
+> remova à mão, se quiser o disco. Commits: I2 `5f4957c` e
+> I3 `0a7f944` (os mesmos da `inf_a4`; só documentação a mais), I6 `89143c9` (imagem nova: Debian +
+> GStreamer, também lê o P4 pela memória compartilhada; aqui segue no modo teste). Como o I1 da
+> `inf_a4` procura `<EQUIPE>.mp4` na pasta da SIS-2 (sem o `VER3`), o pedido vai com
+> `"source": "/videos-p3/<EQUIPE>.mp4"` quando o vídeo do P3 existe. **Ainda não rodada na placa
+> nesse arranjo.** As seções abaixo descrevem a montagem de 24–25/11 e valem no resto.
+
 **Estado (25/11/2026):** `./inf.sh testar` na Jetson com o Kafka da placa: PASSOU 9, FALHOU 0, AVISO 1
 (T-I5, I5 fora da build) — `evidencias/aceite-inf-20261125-080428.txt`. Antes, validada fora da placa (`docker compose config` com os clones reais, `bash -n`,
 `shellcheck` e os scripts contra um `docker` simulado, nos caminhos de sucesso e de falha).
@@ -39,7 +52,8 @@ Commits no `builds/inf/inf.env`. Diferenças em relação às builds das aplica�
 ```bash
 cd /opt/ods/p3 && git pull
 df -h /                                   # a build constrói ~7 imagens novas: estimativa de 8 a 10 GB
-builds/i1/i1.sh status                    # o I1 precisa estar de pé (em builds/i1)
+builds/inf_a4/inf_a4.sh status            # o I1 e o I2 precisam estar de pé (na inf_a4)
+builds/i1/i1.sh parar                     # o I1 permanente fica parado
 ```
 
 - **Disco:** as imagens com PyTorch (I4, I5, I7) são grandes. O `inf.sh` constrói uma por vez, roda
@@ -136,4 +150,4 @@ Todas rodam com `--network none` (nada vai para o Kafka), menos a do I4. Relató
 ./limpar.sh --tudo        # também volumes (pede "inf") e clones exclusivos
 ```
 
-O I1 (`builds/i1`) e o vídeo `VIDEO_DIR/inf-qr.mp4` não saem.
+O I1 e o I2 (da `inf_a4`) e o vídeo `VIDEO_DIR/inf-qr.mp4` não saem.
