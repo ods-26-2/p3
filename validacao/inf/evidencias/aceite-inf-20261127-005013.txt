@@ -1,0 +1,32 @@
+Teste de aceitação da build inf — 2026-11-27 00:51:41 — ods-pc
+Kafka: 34.66.235.91:9093 · I1: VER3, 150 quadros · memória disponível: 3943 MB → 3907 MB
+
+T-I1   PASSOU  I1 detecções (VER3)              150 mensagens
+T-I1M  PASSOU  I1 sem reinício nem OUT_OF_MEMORY RestartCount 0
+T-I2   PASSOU  I2 trilhas                         150 mensagens
+T-I3   PASSOU  I3 calibração anunciada          artifact.published +1, calibration +1
+T-I4   AVISO   I4 sinais                          I4 fora da build inf (comentado no docker-compose.yml)
+T-I5   AVISO   I5 transcrição                   I5 fora da build inf (comentado no docker-compose.yml)
+T-I6   PASSOU  I6 QR                              15 leituras de inf-qr.mp4
+T-I7   PASSOU  I7 placas (GPU)                    4 leituras em 20 quadros de cam0.mp4 (app-plates-1.0.0-fp16+cct-s-v2-global)
+T-I8   PASSOU  I8 eventos de exemplo              +4
+T-I9   PASSOU  I9 conformidade de EPI             150 mensagens
+
+Mensagens por tópico (antes → depois):
+  ods.artifact.published                        5 →        6
+  ods.i1.command                              462 →      463
+  ods.i1.detections                         53665 →    53815
+  ods.i2.tracks                             53815 →    53965
+  ods.i3.calibration                            5 →        6
+  ods.i4.facial_marker                          0 →        0
+  ods.i4.keypoints                              0 →        0
+  ods.i4.sign                                   0 →        0
+  ods.i5.transcript                             0 →        0
+  ods.i6.code_read                            415 →      430
+  ods.i6.image_analysis                    625320 →   625703
+  ods.i7.plate_read                            22 →       26
+  ods.i9.ppe_compliance                       150 →      300
+  ods.industria.defeito_classificado            4 →        8
+  ods.p5.audio_chunk                          734 →      734
+
+Resumo: PASSOU 8, FALHOU 0, AVISO 2

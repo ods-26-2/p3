@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: levantar todas as inferências: inf sobre a inf_a4, sem I4 e I5 (decisões de 27/11)
-- Fase: compose/script alterados e validados só no notebook (bash -n, YAML, simulação do ods.sh trocar); sem commit
-- Último resultado: simulação: trocar inf → limpa a1–a8 com --manter inf --manter inf_a4, sobe inf_a4 e depois inf; trocar a8 → derruba inf e inf_a4
-- Próximo passo: commit (aguarda usuário); na placa: git pull, ../i1/i1.sh parar, docker tag do I2 (5283d60→5f4957c) e do I3 (c3d876e→0a7f944), df -h /, ./ods.sh trocar inf (reconstrói o I6), ./inf.sh testar
-- Bloqueios / perguntas abertas ao usuário: enviar recados SIS-2 e VER-4; recado MOD-1 adiado; teste do P4 (.txt, --desfazer); A2 sem commit; disco ~4 GB
+- Aplicação em foco: inf sobre a inf_a4 (sem I4 e I5)
+- Fase: validado na Jetson (27/11, Kafka da nuvem)
+- Último resultado: ./inf.sh testar PASSOU 8, FALHOU 0, AVISO 2 (T-I4/T-I5 fora) — validacao/inf/evidencias/aceite-inf-20261127-005013.txt
+- Próximo passo: commit da evidência + journal/CLAUDE.md (aguarda usuário); fechar o teste do P4 (.txt, --desfazer)
+- Bloqueios / perguntas abertas ao usuário: enviar recados SIS-2 e VER-4; recado MOD-1 adiado; A2 sem commit; volume do ods.i6.image_analysis na nuvem; stash/arquivos soltos na placa
 - Continuidade: journal.md (raiz) = retrato do projeto, atualizar a cada pedido; este arquivo e o CLAUDE.md versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -355,3 +355,30 @@
 
 ### 2026-11-27 — pergunta: com a placa vazia sobe I1–I9 menos I4/I5? O que dispara I3/I7/I8?
 - Resposta: só via ./ods.sh trocar inf (base_de sobe a inf_a4: I1 + I2 contínuos, engines); ./inf.sh sozinho só avisa que falta o I1. A inf constrói i3/i6/i8/i9/i7 e deixa de pé i6/i9. I3/I7/I8 = perfis one-shot: rodam só com ./inf.sh i3|i7|i8 ou no ./inf.sh testar (compose run --rm, processam a entrada e saem). I1 também só trabalha com START.
+
+### 2026-11-27 — 1ª subida da inf na placa rodou o código antigo
+- Saída trazida pelo usuário: subiram i4-server, i4 e i2 do projeto ods-inf, e a checagem procurou o builds/i1. Isso é o inf.sh de antes do 4dbbb0d: faltou o `git pull` na placa (o commit já está no GitHub).
+- Próximo: na placa, `git pull` e depois `./ods.sh trocar inf`. O `up --remove-orphans` e o `limpar --manter` tiram os containers antigos i2/i4 da ods-inf.
+
+### 2026-11-27 — git pull na placa barrado por edições à mão na inf
+- O diff trazido mostra que alguém religou o I5 na placa, sob demanda: perfil i5, I5_REF 4d79472, funções rodar_i5/parar_i5, T-I5 com PASSOU/AVISO/FALHOU, áudio audio4.ogg, i5-cache, depois do I7 na sequência.
+- Isso contraria a decisão do usuário (I4 e I5 fora). E o I5 4d79472 devolve uma transcrição falsa sem PyTorch, então o T-I5 passaria com texto falso.
+- Recomendado: `git stash push -m edicoes-manuais-inf-placa-27-11 -- builds/inf/` e depois `git pull`. Nada portado para o repositório. O stash fica guardado até o usuário decidir.
+
+### 2026-11-27 — git pull na placa OK (4dbbb0d)
+- Stash feito e pull concluído. Na placa ficam arquivos fora do Git:
+  - builds/i5/ inteiro está staged (A), sem commit: é a build própria do I5 que o usuário tem na placa.
+  - Soltos (??): RECADO-VER-4.md, patches/ e provar.sh/servico.sh do i5; backups *.bak-* e inf.sh.backup-antes-i5 na builds/inf; inf.local.env.placa e i1.local.env.placa, que a lib não lê, porque ela só lê <app>.local.env.
+  - builds/inf/.docker-compose.yml.swp: um vim aberto ou um vim antigo que caiu.
+- Nada foi tocado. Próximo: ./ods.sh trocar inf e ./inf.sh testar.
+
+### 2026-11-27 — inf validada na Jetson (arranjo novo)
+- ./inf.sh testar (Kafka da nuvem, I1 VER3 150 quadros): PASSOU 8, FALHOU 0, AVISO 2 (I4/I5 fora). I1 +150, I2 +150, I3 +1/+1, I6 +15, I7 4 placas -fp16, I8 +4, I9 +150. RestartCount 0, RAM 3,9 GB livres.
+- Observações: ods.i6.image_analysis 625 mil mensagens (+383 no teste): I6 contínuo publica por quadro. ods.p5.audio_chunk 734 vem de outra build (a do I5 do usuário), sem mudança no teste.
+- Arquivos: validacao/inf/evidencias/aceite-inf-20261127-005013.txt, journal.md, CLAUDE.md §5.
+
+### 2026-11-27 — I4/I5 fora do inf.env + guardar-no-notebook.sh da inf
+- inf.env: I4_REF/I5_REF e I4_*/I5_* comentados. O preparar-codigo só lê ^X_REF=, então não clona mais os dois. Nada ativo em inf.sh, compose ou testar-inf-repos.sh usa essas variáveis (grep). As imagens da build vêm do `compose config --images`, que não as incluía.
+- builds/inf/guardar-no-notebook.sh: molde do inf_a4. Imagens ods-i3/i6/i7-gpu/i8-publisher/i9; --com-engine (app-plates-1.0.0); --comprimir-na-placa. Confere I3–I9_REF da placa. Volta: zstd -dc | ssh docker load (sem script de subir).
+- Simulação (ssh e docker falsos): passa com e sem engine, SHA256SUMS ok, erro claro sem o inf.env na placa. bash -n ok; shellcheck e docker compose ausentes no notebook.
+- Guia da inf (§1–3 sem o I4 ativo, novo §7) e builds/README.md atualizados.

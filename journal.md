@@ -29,7 +29,7 @@ cada pedido** (o mais novo em cima em cada seção).
 |---|---|---|---|---|
 | `inf_a4` (era `inf_restrita`) | I1 próprio (GPU) + I2; I3 sob demanda | nuvem | De pé | 25/11: `testar` PASSOU 10/0/0 (nuvem). 27/11: `./inf_a4.sh p4` (P4 da SIS-2 → I1): 150 detecções e 150 trilhas, relatório `.txt` não conferido |
 | `i1` (permanente) | orquestrador do I1 | nuvem | **Fica parado** (decisão de 27/11: a `inf` usa o I1 da `inf_a4`) | 24/11: `testar` PASSOU 16, AVISO 1 |
-| `inf` | I3, I6, I7, I8, I9 **sobre a `inf_a4`** (usa o I1 e o I2 dela desde 27/11); **I4 e I5 fora** | nuvem | **Alterada em 27/11, não rodada nesse arranjo** | 25/11 (arranjo antigo, com o I1 permanente): `testar` PASSOU 9, AVISO 1 (I5 fora) |
+| `inf` | I3, I6, I7, I8, I9 **sobre a `inf_a4`** (usa o I1 e o I2 dela desde 27/11); **I4 e I5 fora** | nuvem | De pé (sobre a `inf_a4`) | **27/11 (nuvem): `testar` PASSOU 8, FALHOU 0, AVISO 2** (I4, I5 fora) |
 | `a8` | A8 + cadeia P4 → I1 → I2 → S1 → S4/S5 + I7 | placa | Referência | 14/11: PASSOU 11, FALHOU 2 (esperados). Imagens guardadas no PC em 25/11 |
 | `a5` | A5 + P4 → I1 (EPI) → I9/I2 → S1, S3, S4 | placa | Validada com falhas conhecidas | 18/11: PASSOU 9, FALHOU 2, BLOQUEADO 1, AVISO 1 |
 | `a2` | A2 + I6 + S4 | placa | Preparada em 17/11, **alterações sem commit**, nunca rodada | — |
@@ -42,6 +42,9 @@ cada pedido** (o mais novo em cima em cada seção).
 
 | Data | Pedido | Resultado |
 |---|---|---|
+| 27/11 | Garantir I4 e I5 fora da `inf`; script para guardar a `inf` no notebook, como o da `inf_a4` | `I4_REF`/`I5_REF` e variáveis comentados no `inf.env` (não clona mais); guia sem I4 ativo; `builds/inf/guardar-no-notebook.sh` (imagens I3, I6, I7, I8, I9; `--com-engine`, `--comprimir-na-placa`), validado só em simulação |
+| 27/11 | Trouxe o `testar` da `inf` no arranjo novo (e antes o `git pull` barrado por edições à mão) | PASSOU 8, FALHOU 0, AVISO 2; evidência versionada. Edições à mão na placa (I5 `4d79472` religado) guardadas em `git stash` |
+| 27/11 | Confirmar se a `inf` sobe tudo o que os I's precisam (sem I4/I5) | Sim: I1/I2 e engines pela `inf_a4`; I3, I6, I7, I8, I9 pela `inf`; P4 não entra (vídeo de arquivo) |
 | 27/11 | Pergunta: com a placa vazia, o que sobe? O que dispara o I3, o I7 e o I8? | Respondido: só o `./ods.sh trocar inf` sobe a `inf_a4` junto (o `./inf.sh` sozinho, não); I3, I7 e I8 só rodam por comando (`./inf.sh i3/i7/i8` ou `./inf.sh testar`) |
 | 27/11 | I4 e I5 fora da build por enquanto | I4 comentado no compose (como o I5), fora do teste (T-I4 = AVISO) e das suítes; commit de 27/11 ("inf: roda sobre a inf_a4…") |
 | 27/11 | Decisões para levantar todas as infs: I5 fora com recado; a `inf` usa o I1 da `inf_a4`; I2, I3 e I6 atualizados | Feito e commitado: `inf` sem I1/I2 próprios, pedido ao I1 com `"source"` do P3, `ods.sh trocar inf` mantém e sobe a `inf_a4`, `--manter` com várias builds; recado à VER-4 escrito (§4.2). **Falta rodar na placa** (§3, item 1) |
@@ -64,20 +67,14 @@ cada pedido** (o mais novo em cima em cada seção).
 
 ## 3. Pendências do P3 (próximos passos)
 
-1. **Levantar todas as infs na placa** (arranjo decidido em 27/11; commitado, falta rodar):
-   ```bash
-   cd /opt/ods/p3 && git pull
-   builds/i1/i1.sh parar         # o I1 permanente fica parado
-   cd builds
-   docker tag ods-i2:5283d60cf7480da7e80d62d6fae385bd30052525 ods-i2:5f4957cd6b101d7eff991bd1503e804a614ee39d
-   docker tag ods-i3:c3d876ea95174e911b68371cd4a9318cada64852 ods-i3:0a7f94432c817801e43b417d65ff509d5e1b3d5a
-   df -h /                       # o I6 novo é reconstruído (Debian + GStreamer + OpenCV)
-   ./ods.sh trocar inf           # limpa as outras, sobe a inf_a4 e depois a inf
-   cd inf && ./inf.sh testar
-   ```
-   A `inf_a4` muda o I2 de etiqueta (mesma imagem): o `subir` dela recria o `i2`. Disco: ~4 GB livres.
-   Com o I4 fora, as imagens `ods-i4:503f64b…`, `ods-i4-server:503f64b…` e `ods-i4-video:p3-1` ficam
-   órfãs na placa (nenhum `limpar.sh` as lista): remover à mão libera espaço, se o usuário quiser.
+1. **Infs na placa: feito em 27/11** (PASSOU 8/0/2). Sobras:
+   - imagens órfãs `ods-i4:503f64b…`, `ods-i4-server:503f64b…` e `ods-i4-video:p3-1` (remover à mão só se o
+     usuário quiser); os clones `i4`/`i5` já feitos em `SRC_DIR` ficam (o `inf.env` não os lista mais);
+   - na placa: `git stash` com o I5 `4d79472` religado à mão (não portado: contraria a decisão e o I5
+     devolve transcrição falsa), `builds/i5/` staged sem commit, backups `*.bak-*`, `inf.local.env.placa`
+     (a lib não lê) e `builds/inf/.docker-compose.yml.swp`;
+   - `ods.i6.image_analysis` com ~625 mil mensagens na nuvem (+383 em ~1,5 min): o I6 contínuo publica
+     por quadro do vídeo em laço; parar o `i6` quando não estiver em teste, ou avaliar com a VER-2.
 2. **Fechar o teste do P4:** trazer `resultados/p4-i1-*.txt` e a faixa de `frame_index`; rodar
    `./inf_a4.sh p4 --desfazer`; copiar a evidência para `validacao/inf_a4/evidencias/`.
 3. **Evidências da `inf_a4`:** copiar `aceite-inf_restrita-20261125-161228.txt` e `-162407.txt` da placa
@@ -187,6 +184,7 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 
 | Data | Build | Resultado | Onde |
 |---|---|---|---|
+| 27/11 | `inf` sobre a `inf_a4` (nuvem) | PASSOU 8, FALHOU 0, AVISO 2 (I4, I5 fora); I7 `-fp16`; I1 sem reinício; RAM 3,9 GB livres | `validacao/inf/evidencias/aceite-inf-20261127-005013.txt` |
 | 27/11 | `inf_a4` + P4 | P4 → I1: 150 detecções e 150 trilhas; sessão e `source_id` do P4 propagados; I1 perdeu ~616 quadros na partida (~13,5 s de carga) e processou ~18 quadros/s com o P4 a 30 | Logs trazidos pelo usuário (relatório `.txt` pendente) |
 | 25/11 | `inf_restrita` (nuvem) | PASSOU 10, FALHOU 0 | Na placa: `resultados/aceite-inf_restrita-20261125-162407.txt` |
 | 25/11 | `inf_restrita` (placa) | PASSOU 10, FALHOU 0 | Na placa: `resultados/aceite-inf_restrita-20261125-161228.txt` |
@@ -217,6 +215,8 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 
 ## 8. Histórico deste arquivo
 
+- **27/11/2026:** I4/I5 fora também do `inf.env`; `inf/guardar-no-notebook.sh`.
+- **27/11/2026:** `inf` validada na placa no arranjo novo (PASSOU 8/0/2).
 - **27/11/2026:** I4 fora da build `inf`; tudo de 27/11 commitado ("inf: roda sobre a inf_a4…").
 - **27/11/2026:** decisões para levantar as infs aplicadas; recado à VER-4.
 - **27/11/2026:** criado (pedido do usuário), com o estado até o levantamento das inferências.

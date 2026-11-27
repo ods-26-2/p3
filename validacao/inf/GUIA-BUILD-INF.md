@@ -3,19 +3,23 @@
 Guia de execução e de teste da build `builds/inf` (P3 · SIS-1). Montada em 24/11/2026.
 
 > **Desde 27/11/2026 a `inf` roda sobre a `inf_a4`** (decisão do usuário): o I1 (orquestrador na GPU)
-> e o I2 são os da `builds/inf_a4`, que tem de estar de pé; a `inf` soma I3 (sob demanda), I4, I6,
+> e o I2 são os da `builds/inf_a4`, que tem de estar de pé; a `inf` soma I3 (sob demanda), I6,
 > I7, I8 e I9. O I1 permanente (`builds/i1`) fica parado: dois orquestradores no mesmo Kafka disputam
 > a GPU e os pedidos. `../ods.sh trocar inf` mantém e sobe a `inf_a4` antes. **I4 e I5 fora** da build
 > (I5 desde 24/11, I4 desde 27/11, decisão do usuário; T-I4 e T-I5 saem como AVISO). As imagens do I4
 > já construídas na placa (`ods-i4`, `ods-i4-server`, `ods-i4-video`) não saem com o `limpar.sh`:
-> remova à mão, se quiser o disco. Commits: I2 `5f4957c` e
+> remova à mão, se quiser o disco. `I4_REF`/`I5_REF` e as variáveis deles ficam comentados no `inf.env`
+> (o `preparar-codigo.sh` não clona os dois). Commits: I2 `5f4957c` e
 > I3 `0a7f944` (os mesmos da `inf_a4`; só documentação a mais), I6 `89143c9` (imagem nova: Debian +
 > GStreamer, também lê o P4 pela memória compartilhada; aqui segue no modo teste). Como o I1 da
 > `inf_a4` procura `<EQUIPE>.mp4` na pasta da SIS-2 (sem o `VER3`), o pedido vai com
-> `"source": "/videos-p3/<EQUIPE>.mp4"` quando o vídeo do P3 existe. **Ainda não rodada na placa
-> nesse arranjo.** As seções abaixo descrevem a montagem de 24–25/11 e valem no resto.
+> `"source": "/videos-p3/<EQUIPE>.mp4"` quando o vídeo do P3 existe.
 
-**Estado (25/11/2026):** `./inf.sh testar` na Jetson com o Kafka da placa: PASSOU 9, FALHOU 0, AVISO 1
+**Estado (27/11/2026):** `./inf.sh testar` na Jetson com o **Kafka da nuvem**, nesse arranjo: PASSOU 8,
+FALHOU 0, AVISO 2 (T-I4 e T-I5, fora) — `evidencias/aceite-inf-20261127-005013.txt`. I7 na GPU (`-fp16`),
+I1 sem reinício, ~3,9 GB de RAM livres.
+
+**Antes (25/11/2026, arranjo antigo):** `./inf.sh testar` na Jetson com o Kafka da placa: PASSOU 9, FALHOU 0, AVISO 1
 (T-I5, I5 fora da build) — `evidencias/aceite-inf-20261125-080428.txt`. Antes, validada fora da placa (`docker compose config` com os clones reais, `bash -n`,
 `shellcheck` e os scripts contra um `docker` simulado, nos caminhos de sucesso e de falha).
 Todas as imagens da build foram construídas na Jetson (24/11/2026). **Ainda não testada com o Kafka da
@@ -25,10 +29,10 @@ nuvem** (desligado em 23/11 e 25/11).
 
 | Inferência | Serviço | Como roda | Entrada | Saída (tópico) |
 |---|---|---|---|---|
-| I1 detecção | — (build `i1/`) | permanente, GPU | `./inf.sh i1 [EQUIPE] [QUADROS]` → `ods.i1.command` | `ods.i1.detections` |
-| I2 rastreio | `i2` | contínuo | `ods.i1.detections` | `ods.i2.tracks` |
+| I1 detecção | — (build `inf_a4/`) | contínuo, GPU | `./inf.sh i1 [EQUIPE] [QUADROS]` → `ods.i1.command` | `ods.i1.detections` |
+| I2 rastreio | — (build `inf_a4/`) | contínuo | `ods.i1.detections` | `ods.i2.tracks` |
 | I3 calibração | `i3` | `./inf.sh i3` | imagem da quadra do A4 (repo do I3) | `ods.i3.calibration`, `ods.artifact.published` |
-| I4 Libras | `i4-server` + `i4` | contínuo | `./inf.sh i4` (vídeo `teste.mp4` do I4) ou o `webcam.py` do I4 | `ods.i4.sign`, `ods.i4.keypoints`, `ods.i4.facial_marker` |
+| I4 Libras | `i4-server` + `i4` (**fora da build desde 27/11/2026**, comentado no compose) | — | `./inf.sh i4` (vídeo `teste.mp4` do I4) ou o `webcam.py` do I4 | `ods.i4.sign`, `ods.i4.keypoints`, `ods.i4.facial_marker` |
 | I5 fala | `i5` (**fora da build desde 24/11/2026**, comentado no compose; o usuário tem build própria do I5) | — | `./inf.sh i5` (áudio como se fosse o P5, em `ods.p5.audio_chunk`) | `ods.i5.transcript` |
 | I6 QR | `i6` | contínuo | `VIDEO_DIR/inf-qr.mp4` em laço (gerado pelo P3) | `ods.i6.code_read` |
 | I7 placas | `i7` | `./inf.sh i7`, **detector na GPU** | `VIDEO_DIR/cam0.mp4` (20 quadros amostrados) | `ods.i7.plate_read` |
@@ -37,35 +41,33 @@ nuvem** (desligado em 23/11 e 25/11).
 
 Commits no `builds/inf/inf.env`. Diferenças em relação às builds das aplicações:
 
-- **I3 `c3d876e`** (o A8/A4 usam `ac28d37`): publicar exige `--registro`; o registro fica no volume `i3-registro`.
-- **I4 `503f64b`** (o A6 usa `61b39a1`): agora há o servidor C++ e o reconhecimento ao vivo em container.
-- **I5 `d7b1379`** (o A7 usa `cdb00d2`): imagem do P3 em CPU, `ods-i5-cpu`. O `Dockerfile.jetson` da
+- **I3 `0a7f944`** (o A8/A4 usam `ac28d37`): publicar exige `--registro`; o registro fica no volume `i3-registro`.
+- **I4 `503f64b`** (fora; o A6 usa `61b39a1`): agora há o servidor C++ e o reconhecimento ao vivo em container.
+- **I5 `d7b1379`** (fora; o A7 usa `cdb00d2`): imagem do P3 em CPU, `ods-i5-cpu`. O `Dockerfile.jetson` da
   equipe usa `l4t-pytorch:r35.2.1` (JetPack 5), que não roda no JetPack 6.2.1 da placa.
 - **I7 `1441bbb`** (o A8 usa `a4da4b0`): lê vídeo (`--video`) e o P4 (`--p4`) sozinho. **Detector na GPU**
   (imagem do P3 `ods-i7-gpu`, decisão de 24/11/2026): o pacote `app-plates` 1.0.0 do I7 é o mesmo ONNX do I1
   (sha256 `b698a519…`), então o I7 lê a engine FP16 que o `builds/i1` já compilou em
   `/var/lib/ods/engines/app-plates-1.0.0`. Mesma base `l4t-tensorrt` e mesmo P2 0.2.0a1 do I1, sem PyTorch;
-  o OCR fica em CPU. Exige o I1 com as engines prontas (`builds/i1/i1.sh engines`).
+  o OCR fica em CPU. Exige as engines do I1 prontas (`builds/inf_a4/inf_a4.sh engines`).
 
 ## 2. Antes de subir
 
 ```bash
 cd /opt/ods/p3 && git pull
-df -h /                                   # a build constrói ~7 imagens novas: estimativa de 8 a 10 GB
+df -h /                                   # a build constrói 5 imagens (I3, I6, I7, I8, I9)
 builds/inf_a4/inf_a4.sh status            # o I1 e o I2 precisam estar de pé (na inf_a4)
 builds/i1/i1.sh parar                     # o I1 permanente fica parado
 ```
 
-- **Disco:** as imagens com PyTorch (I4, I5, I7) são grandes. O `inf.sh` constrói uma por vez, roda
+- **Disco:** a do I7 (TensorRT, 1,9 GB) é a maior. O `inf.sh` constrói uma por vez, roda
   `docker builder prune -af` depois de cada uma e para abaixo de 4 GB livres. Se não couber, libere
   a build de uma aplicação: `../ods.sh trocar inf` remove as outras e sobe esta.
 - **Mesmo Kafka do I1:** o `inf.sh` lê o broker do container do I1 e recusa subir com outro. Com o
-  I1 no Kafka da placa (`i1.local.env`): `cp inf.local.env.exemplo inf.local.env`.
-- **Memória:** o I4 (MediaPipe + PyTorch), o I5 (Whisper small em float32) e o I7 (quando roda)
-  ficam na mesma RAM que o TensorRT do I1. O teste marca `T-I1M` se o I1 reiniciar ou der
+  I1 da `inf_a4` no Kafka da placa (`inf_a4.local.env`): `cp inf.local.env.exemplo inf.local.env`.
+- **Memória:** o I7 (quando roda) fica na mesma RAM que o TensorRT do I1. O teste marca `T-I1M` se o I1 reiniciar ou der
   `OUT_OF_MEMORY`. Se der, esvazie o cache de páginas antes (`sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'`).
-- **Internet na primeira execução:** o I5 baixa o Whisper (fica no volume `i5-cache`) e o I7, o OCR
-  (volume `i7-cache`).
+- **Internet na primeira execução:** o I7 baixa o OCR (volume `i7-cache`).
 
 ## 3. Subir e testar
 
@@ -76,8 +78,8 @@ cd /opt/ods/p3/builds/inf
 ./inf.sh testar       # → resultados/aceite-inf-<data>.txt
 ```
 
-O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, roda I3, I8,
-I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo (o I5 está fora da build).
+O `testar` conta as mensagens de cada tópico, pede 150 quadros do VER3 ao I1, roda I3, I8
+e I7 em sequência, espera o I9 e conta de novo (o I4 e o I5 estão fora da build).
 
 ### Resultado esperado
 
@@ -86,7 +88,7 @@ I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo (o I5 está fora da 
 | T-I1, T-I2, T-I9 | PASSOU | O I1 com `app-epi` no `epi.mp4`; I2 e I9 consomem as detecções |
 | T-I1M | PASSOU | Sem reinício nem `OUT_OF_MEMORY` no I1 durante o teste |
 | T-I3 | PASSOU | Rodar de novo só reanuncia (`artifact.published`); `calibration` pode não crescer |
-| T-I4 | PASSOU ou AVISO | AVISO = pontos-chave publicados, nenhum sinal reconhecido no `teste.mp4` |
+| T-I4 | AVISO | I4 fora da build (comentado no compose) |
 | T-I5 | AVISO | I5 fora da build (comentado no compose) |
 | T-I6 | PASSOU | Uma leitura por volta do vídeo de QR (20 s) |
 | T-I7 | PASSOU ou AVISO | Roda depois do I1 (os dois usam a GPU). FALHOU se a `artifact_version` não terminar em `-fp16` (caiu para CPU). AVISO = nenhuma placa com confiança ≥ 0,9 nos 20 quadros |
@@ -97,9 +99,8 @@ I4 (vídeo) e I7 em sequência, espera o I9 e conta de novo (o I5 está fora da 
 ```bash
 ./inf.sh contar                 # mensagens por tópico
 ./inf.sh i1 VER5 50             # placas no cam0.mp4 (I1) → ods.i1.detections e ods.i2.tracks
-./inf.sh log i4                 # reconhecimento ao vivo
 alias dc='docker compose --env-file inf.env $( [ -f inf.local.env ] && echo --env-file inf.local.env )'
-dc logs --tail 30 i5
+dc logs --tail 30 i9
 ```
 
 ## 4. Suítes de teste das equipes nas imagens da build
@@ -151,3 +152,28 @@ Todas rodam com `--network none` (nada vai para o Kafka), menos a do I4. Relató
 ```
 
 O I1 e o I2 (da `inf_a4`) e o vídeo `VIDEO_DIR/inf-qr.mp4` não saem.
+
+## 7. Guardar as imagens no notebook
+
+Roda **no notebook**, não na placa, por `ssh`, sem gravar arquivo no disco da placa. É o mesmo molde do
+`builds/inf_a4/guardar-no-notebook.sh`.
+
+```bash
+cd ~/Documents/GitHub/p3/builds/inf
+./guardar-no-notebook.sh                        # ~/ods-imagens/inf-AAAAMMDD-HHMM/
+./guardar-no-notebook.sh --com-engine           # também a engine app-plates-1.0.0 do I7
+JETSON=ods@200.17.66.56 ./guardar-no-notebook.sh --comprimir-na-placa   # de fora do laboratório
+```
+
+- **Imagens:** `ods-i3`, `ods-i6`, `ods-i7-gpu`, `ods-i8-publisher` e `ods-i9`, nos commits do `inf.env`.
+- **Fica de fora:**
+  - o I1 e o I2: são da `inf_a4`, guarde-os com o script dela;
+  - o `cp-kafka`: é pública;
+  - o vídeo de QR: o `./inf.sh` gera de novo.
+- **O `ods-i3`** é a mesma imagem nas duas builds e vai nas duas pastas.
+- **Antes de rodar:** o p3 da placa precisa estar no mesmo commit, porque o script confere os `*_REF`.
+  O I7 e o I8 só existem na placa depois do primeiro `./inf.sh testar`, ou de `./inf.sh i7` e `./inf.sh i8`.
+
+Para carregar de volta, ainda sem script próprio: entre na pasta criada, confira com
+`sha256sum -c SHA256SUMS` e rode `zstd -dc imagens.tar.zst | ssh ods@172.18.4.56 docker load`. Antes,
+confira o disco da placa: `df -h /`.
