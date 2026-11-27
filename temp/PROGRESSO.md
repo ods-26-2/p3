@@ -614,3 +614,8 @@
 - Novos: builds/inf_a4/guardar-no-notebook.sh e subir-do-notebook.sh (rodam no notebook; ssh com ControlMaster; docker save|zstd e zstd -dc|docker load; engines por tar num container da imagem do I3; manifesto + SHA256SUMS; confere *_REF do p3 da placa; disco = tar + 4 GB, FORCAR=1).
 - Achado na simulação: python3 do notebook é atalho do asdf sem versão nesta pasta → scripts sem python (só zstd/tar/awk).
 - Validado: bash -n em todos; simulação (scratchpad/sim, ssh e docker falsos): guardar, subir, 2ª subida, commit diferente, placa sem build, imagem ausente, pasta corrompida, disco insuficiente. Sem shellcheck e sem docker compose config (binários ausentes; download negado).
+
+### 2026-11-26 — opção de comprimir/descomprimir na placa (usuário em casa, sem acesso ao lab)
+- Contexto: de casa, 172.18.4.56 não responde; sem alias no ~/.ssh/config. Os scripts aceitam JETSON=<endereço> (ex.: ods@200.17.66.56, se o ssh estiver aberto para fora: não testado).
+- Feito: guardar-no-notebook.sh --comprimir-na-placa e subir-do-notebook.sh --descomprimir-na-placa: zstd na placa se houver, senão pigz/gzip (nice 19), via bash -o pipefail na placa; pasta no notebook continua .zst; manifesto ganha COMPRESSAO_NA_PLACA. Guia §4.1 e CLAUDE.md.
+- Validado só na simulação: placa com zstd e só com gzip (guardar e subir), docker save falhando no meio → erro e pasta .parcial, modo padrão inalterado. Sem commit (aguarda usuário).

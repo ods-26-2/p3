@@ -97,6 +97,11 @@ cd ~/Documents/GitHub/p3/builds/inf_a4
   não carregar.
 - Disco: o `subir` exige livre na placa o tamanho do tar mais `MIN_LIVRE_GB` (4). É uma estimativa por
   cima (o `docker load` pula camadas que já existem); `FORCAR=1` ignora a conta.
+- **De fora do laboratório** (rede lenta): `--comprimir-na-placa` no `guardar` e `--descomprimir-na-placa`
+  no `subir`. A compressão passa para a placa (zstd se houver, senão gzip, com `nice 19`), e pela rede
+  vai o tar comprimido, não o tar cru. Continua sem arquivo no disco da placa; a pasta no notebook é
+  sempre `.zst`. O endereço vem de `JETSON` (ex.: `JETSON=ods@200.17.66.56`, se o ssh da placa estiver
+  aberto para fora). Na rede do laboratório não precisa: comprimir no notebook é mais rápido.
 - Variáveis: `JETSON` (padrão `ods@172.18.4.56`), `P3_JETSON` (`/opt/ods/p3`), `DESTINO` (`~/ods-imagens`).
 - Validado só no notebook, contra `ssh` e `docker` simulados (26/11/2026): guardar, subir, segunda subida
   sem nada a carregar, commit diferente, placa sem a build, imagem ausente, pasta corrompida e disco

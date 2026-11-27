@@ -4,8 +4,13 @@
 #
 #   ./guardar-no-notebook.sh                  cria ~/ods-imagens/inf_a4-AAAAMMDD-HHMM/
 #   ./guardar-no-notebook.sh --sem-engines    só as imagens
+#   ./guardar-no-notebook.sh --comprimir-na-placa   comprime NA PLACA antes de mandar (rede lenta,
+#                                             ex.: de casa): ~metade dos bytes pela rede, usando a CPU
+#                                             da placa (com nice 19). zstd se a placa tiver; senão gzip
+#   JETSON=ods@200.17.66.56 ./guardar-no-notebook.sh --comprimir-na-placa    (de fora do laboratório)
 #
-# Nada é gravado no disco da placa: o "docker save" sai pelo ssh e é comprimido aqui (zstd).
+# Nada é gravado no disco da placa: o "docker save" sai pelo ssh e é comprimido no caminho (aqui,
+# ou na placa com --comprimir-na-placa). A pasta guarda sempre .zst.
 # Uma senha só: as chamadas ao ssh dividem uma conexão.
 #
 # A pasta criada tem:
@@ -26,13 +31,15 @@ JETSON=${JETSON:-ods@172.18.4.56}
 P3_JETSON=${P3_JETSON:-/opt/ods/p3}
 DESTINO=${DESTINO:-$HOME/ods-imagens}
 NIVEL=${ZSTD_NIVEL:-3}
-COM_ENGINES=1
-case "${1:-}" in
-  "") ;;
-  --sem-engines) COM_ENGINES=0 ;;
-  -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
-  *) echo "opção desconhecida: $1 (use --sem-engines ou --help)" >&2; exit 1 ;;
-esac
+COM_ENGINES=1 NA_PLACA=0
+for a in "$@"; do
+  case "$a" in
+    --sem-engines) COM_ENGINES=0 ;;
+    --comprimir-na-placa) NA_PLACA=1 ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+    *) echo "opção desconhecida: $a (use --sem-engines, --comprimir-na-placa ou --help)" >&2; exit 1 ;;
+  esac
+done
 
 V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; N=$'\e[0m'
 ok()    { echo "${V}✔${N} $*"; }
@@ -60,6 +67,26 @@ SSH=(ssh -o ControlMaster=auto -o ControlPath="$CTL/s" -o ControlPersist=15m "$J
 etapa "Conferindo a Jetson ($JETSON)"
 "${SSH[@]}" true || erro "não consegui entrar em $JETSON por ssh"
 ok "ssh em $JETSON"
+
+# Compressor da placa (--comprimir-na-placa): zstd, senão pigz/gzip. Vazio = comprime aqui.
+COMP=""
+if (( NA_PLACA )); then
+  COMP=$("${SSH[@]}" 'for c in zstd pigz gzip; do command -v $c >/dev/null && { echo $c; break; }; done' || true)
+  [[ -n "$COMP" ]] || erro "a placa não tem zstd, pigz nem gzip; rode sem --comprimir-na-placa"
+  [[ "$COMP" == zstd ]] || command -v gzip >/dev/null || erro "falta 'gzip' neste computador (a placa só tem $COMP)"
+  ok "compressão na placa: $COMP (nice 19); aqui o arquivo é gravado em zstd"
+fi
+
+# trazer '<comando na placa que escreve um tar no stdout>' <arquivo.zst>
+# O comando roda num bash com pipefail na placa: falha do docker save não passa por sucesso.
+# Não use aspas simples dentro do comando (ele vai entre aspas simples para o bash da placa).
+trazer() {
+  case "$COMP" in
+    "")   "${SSH[@]}" "bash -o pipefail -c '$1'" | zstd -T0 "-$NIVEL" -q -o "$2" ;;
+    zstd) "${SSH[@]}" "bash -o pipefail -c '$1 | nice -n 19 zstd -T0 -$NIVEL -q -c'" > "$2" ;;
+    *)    "${SSH[@]}" "bash -o pipefail -c '$1 | nice -n 19 $COMP -1 -c'" | gzip -dc | zstd -T0 "-$NIVEL" -q -o "$2" ;;
+  esac
+}
 
 # Os commits do .env da placa têm de ser os daqui: as tags das imagens são os commits.
 env_placa=$("${SSH[@]}" "cat '$P3_JETSON/builds/inf_a4/inf_a4.env'" 2>/dev/null) \
@@ -89,8 +116,11 @@ PASTA="$DESTINO/inf_a4-$(date +%Y%m%d-%H%M)"
 PARCIAL="$PASTA.parcial"
 rm -rf "$PARCIAL"; mkdir -p "$PARCIAL"
 
-etapa "Imagens: docker save na placa → zstd aqui (alguns minutos; a do I1 é a maior)"
-"${SSH[@]}" "docker save ${IMAGENS[*]}" | zstd -T0 "-$NIVEL" -q -o "$PARCIAL/imagens.tar.zst" \
+case "$COMP" in
+  "") rota="rede → zstd aqui" ;; zstd) rota="zstd na placa → rede" ;; *) rota="$COMP na placa → rede → zstd aqui" ;;
+esac
+etapa "Imagens: docker save na placa → $rota (alguns minutos; a do I1 é a maior)"
+trazer "docker save ${IMAGENS[*]}" "$PARCIAL/imagens.tar.zst" \
   || erro "a cópia das imagens falhou; nada foi guardado (apague $PARCIAL)"
 ok "imagens.tar.zst: $(du -h "$PARCIAL/imagens.tar.zst" | cut -f1)"
 
@@ -117,7 +147,7 @@ if (( COM_ENGINES )); then
     if grep -qx "$e" <<<"$existentes"; then engines_ok+=("$e"); else aviso "engine $e não existe na placa (fica de fora)"; fi
   done
   if (( ${#engines_ok[@]} )); then
-    "${SSH[@]}" "${LER[*]} -c 'tar -C /e -cf - ${engines_ok[*]}'" | zstd -T0 "-$NIVEL" -q -o "$PARCIAL/engines.tar.zst" \
+    trazer "${LER[*]} -c \"tar -C /e -cf - ${engines_ok[*]}\"" "$PARCIAL/engines.tar.zst" \
       || erro "a cópia das engines falhou"
     zstd -dc "$PARCIAL/engines.tar.zst" | tar -tf - >/dev/null || erro "o tar das engines está corrompido"
     ok "engines.tar.zst: ${engines_ok[*]} ($(du -h "$PARCIAL/engines.tar.zst" | cut -f1))"
@@ -132,6 +162,7 @@ cp inf_a4.env "$PARCIAL/inf_a4.env"
   echo "# Build inf_a4 guardada pelo guardar-no-notebook.sh (P3 / SIS-1)"
   echo "DATA=$(date -Iseconds)"
   echo "JETSON=$JETSON"
+  echo "COMPRESSAO_NA_PLACA=${COMP:-não}"
   echo "P3_COMMIT_PLACA=$("${SSH[@]}" "git -C '$P3_JETSON' rev-parse HEAD" 2>/dev/null || echo '?')"
   echo "I1_REF=$I1_REF"
   echo "I2_REF=$I2_REF"
