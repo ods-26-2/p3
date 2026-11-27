@@ -619,3 +619,20 @@
 - Contexto: de casa, 172.18.4.56 não responde; sem alias no ~/.ssh/config. Os scripts aceitam JETSON=<endereço> (ex.: ods@200.17.66.56, se o ssh estiver aberto para fora: não testado).
 - Feito: guardar-no-notebook.sh --comprimir-na-placa e subir-do-notebook.sh --descomprimir-na-placa: zstd na placa se houver, senão pigz/gzip (nice 19), via bash -o pipefail na placa; pasta no notebook continua .zst; manifesto ganha COMPRESSAO_NA_PLACA. Guia §4.1 e CLAUDE.md.
 - Validado só na simulação: placa com zstd e só com gzip (guardar e subir), docker save falhando no meio → erro e pasta .parcial, modo padrão inalterado. Sem commit (aguarda usuário).
+
+### 2026-11-26 — pergunta: como conferir o P4 (/home/sys2/SIS-2/p4) e a ligação P4 → I1
+- Lido (GitHub p4 main 640e19e, 06/11; conferir se a pasta da SIS-2 é a mesma): roda nativo com venv (scripts/p4_demo.sh video|imx519|imx477|kafka; p4_ler.sh lê 1 quadro e grava PNG); socket FIXO no código: /tmp/p4_file_shm (arquivo), /tmp/p4_imx519_shm, /tmp/p4_imx477_shm; shmsink wait-for-connection=false (toca sem esperar leitor); vídeo padrão ../videos/cars_extended.mp4 (P4_VIDEO_PATH muda); Kafka desligado no modo video. 20 testes unittest.
+- I1 3b2a9cc: START com "source": "video"/"file"/"/tmp/p4_file_shm" → P4GStreamerShmSource (mesmas caps application/x-ods-frame,version=1 e cabeçalho P4R1: formato compatível).
+- PROBLEMA: na inf_a4 o /tmp do I1 é /var/lib/ods/p4-shm da placa (I1_P4_DIR), e o P4 nativo cria o socket no /tmp da placa → o I1 não o vê. Contorno sem editar código: inf_a4.local.env com I1_P4_DIR=/tmp (reversível) e ./inf_a4.sh parar && ./inf_a4.sh. ipc: host já dá o /dev/shm.
+- Próximo: usuário roda o roteiro (P4 sozinho → P4 + I1) e traz a saída; oferecer ./inf_a4.sh p4 se quiser automatizar.
+
+### 2026-11-26 — ./inf_a4.sh p4 (P4 da SIS-2 → I1), feito
+- Arquivos: inf_a4.sh (p4_testar, p4_ligar_tmp, p4_desfazer, parar_p4, resumo_tempos, esperar_i1_pronto extraída do pos_subida; trap encadeado com o da lib; vivo() por /proc porque kill -0 no sudo dá EPERM), inf_a4.env (P4_DIR, P4_USUARIO, P4_VIDEO, INF_P4_EQUIPE, INF_P4_QUADROS), guia §4.0, CLAUDE.md (§5 e pendência SIS-2).
+- Achado: com P4 como fonte, o I1 publica com source_id/session_id do cabeçalho do P4 (file_INV1); o A4 espera INV1.
+- Validado só em simulação (scratchpad/simp4: docker, sudo e P4 falsos): feliz PASSOU 6; 2ª vez sem recriar; trava ocupada → recusa; socket velho → apagado; P4 não sobe → sem START, FALHOU 5; erro do I1 → T-P4S/I/C/G FALHOU; equipe ocupada → aviso; --desfazer mantém as outras linhas do local.env. Defeitos achados e corrigidos na simulação: python3 falhando derrubava o relatório (set -e); T-P4G passava sem mensagens.
+- Próximo: commit (aguarda usuário); na placa: git pull e ./inf_a4.sh p4.
+
+### 2026-11-26 — regra do usuário: nada do P4 nem de /home/sys2 pode ser alterado
+- Revisão do ./inf_a4.sh p4: git status regravaria .git/index → git --no-optional-locks; p4_demo/p4_ler gerariam __pycache__ em src/ → PYTHONDONTWRITEBYTECODE=1; socket velho de outra execução era apagado → agora para e avisa (só apaga o socket criado pela própria execução, no /tmp). Regra no CLAUDE.md §4, guia e memória sys2-somente-leitura.
+- Simulação: feliz PASSOU 6; socket velho → para sem apagar; PYTHONDONTWRITEBYTECODE=1 chega ao P4.
+- Pergunta 2 (salvar imagens de novo?): não — só scripts e .env mudaram; I1/I2/I3_REF iguais (tags e ids das imagens iguais); o subir-do-notebook confere só os *_REF.

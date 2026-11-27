@@ -11,6 +11,12 @@
 #   ./inf_a4.sh comando '<json>'  manda um comando qualquer em ods.i1.command
 #   ./inf_a4.sh i3           calibração da quadra do A4 → ods.i3.calibration + ods.artifact.published
 #   ./inf_a4.sh contar       mensagens por tópico da build
+#   ./inf_a4.sh p4 [VIDEO] [QUADROS]   P4 da SIS-2 → I1: toca VIDEO (padrão P4_VIDEO) pelo P4 nativo
+#                                  da placa (sudo -u P4_USUARIO), lê um quadro com o leitor do P4,
+#                                  pede ao I1 "source": "video" e confere as detecções no Kafka
+#                                  → resultados/p4-i1-*.txt. Na 1ª vez pergunta se liga o contorno
+#                                  I1_P4_DIR=/tmp no inf_a4.local.env (--preparar: sem perguntar)
+#   ./inf_a4.sh p4 --desfazer      tira o contorno e recria o i1 com a pasta de sempre
 #   ./inf_a4.sh testar       cadeia I1 → I2 e I3 pelo Kafka + contrato de cada mensagem com o
 #                                  schema do próprio repositório → resultados/aceite-inf_a4-*.txt
 #   ./inf_a4.sh repos [i1 i2 i3]  suítes de teste dos repositórios nas imagens desta build
@@ -164,9 +170,7 @@ preparar_engines() {
 
 container_i1() { dc ps -aq i1 2>/dev/null | head -1; }
 
-pos_subida() {
-  preparar_engines
-  etapa "Orquestrador do I1"
+esperar_i1_pronto() {
   local limite=$((SECONDS + 60)) c
   c=$(container_i1)
   until docker logs "$c" 2>&1 | grep -q 'Aguardando comandos'; do
@@ -174,6 +178,12 @@ pos_subida() {
     sleep 2
   done
   ok "I1 pronto: $(docker logs "$c" 2>&1 | grep 'Aguardando comandos' | tail -1)"
+}
+
+pos_subida() {
+  preparar_engines
+  etapa "Orquestrador do I1"
+  esperar_i1_pronto
   echo
   echo "Pedido ao I1:   ./inf_a4.sh i1 [EQUIPE] [QUADROS]   (ex.: ./inf_a4.sh i1 INV1 150)"
   echo "Calibração I3:  ./inf_a4.sh i3"
@@ -382,6 +392,247 @@ testar() {
   (( f == 0 ))
 }
 
+# ---------------------------------------------------------------- P4 da SIS-2 → I1 (./inf_a4.sh p4)
+#
+# O P4 roda nativo na placa (pasta, venv e usuário da SIS-2), chamado com sudo -u $P4_USUARIO. O
+# socket do modo arquivo é fixo no código do P4 (/tmp/p4_file_shm, no /tmp da PLACA), e o I1 desta
+# build vê como /tmp a pasta I1_P4_DIR. Para o I1 achar o socket, I1_P4_DIR=/tmp no inf_a4.local.env
+# (fora do Git): CONTORNO PROVISÓRIO, desfeito com ./inf_a4.sh p4 --desfazer. A memória
+# compartilhada em si vem pelo ipc: host.
+#
+# NADA do P4 nem das pastas do sys2 é alterado (regra do usuário, 26/11/2026): como sys2 só se lê
+# (test, git log, git --no-optional-locks status, que não regrava o índice) e se rodam os scripts do
+# próprio P4 com PYTHONDONTWRITEBYTECODE=1 (sem __pycache__ na pasta dele). O que o P4 grava fica no
+# /tmp da placa: o socket e a trava (/tmp/p4_file_shm, /tmp/p4_demo_file.lock) e o PNG do leitor
+# (/tmp/p4_frame_recebido.png). Socket velho de outra execução não é apagado: o comando para e avisa.
+
+# Fixos no código do P4 (src/main.py e scripts/p4_demo.sh); a variável só serve à simulação
+P4_SOCKET=${P4_SOCKET:-/tmp/p4_file_shm}
+P4_LOCK=${P4_LOCK:-/tmp/p4_demo_file.lock}
+P4_MARCA='# ./inf_a4.sh p4: o I1 vê o /tmp da placa (socket do P4 da SIS-2). Desfazer: ./inf_a4.sh p4 --desfazer'
+P4_PID=""
+
+como_p4() { sudo -u "${P4_USUARIO:?defina P4_USUARIO}" "$@"; }
+
+# Processo vivo? (o P4 roda sob o sudo, que é do root: "kill -0" dá EPERM e pareceria morto)
+vivo() { [[ -r "/proc/$1/stat" ]] && [[ "$(awk '{ print $3 }' "/proc/$1/stat" 2>/dev/null)" != Z ]]; }
+
+i1_ve_tmp_da_placa() {
+  local c; c=$(container_i1)
+  [[ -n "$c" ]] || return 1
+  [[ "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/tmp"}}{{.Source}}{{end}}{{end}}' "$c")" == /tmp ]]
+}
+
+# Recria só o i1 com o I1_P4_DIR atual (o compose usa a variável exportada pela lib)
+recriar_i1() {
+  ODS_LOCAL_ENV=()
+  [[ -f "$APP.local.env" ]] && ODS_LOCAL_ENV=(--env-file "$APP.local.env")
+  etapa "Recriando o i1 (I1_P4_DIR=$I1_P4_DIR)"
+  dc up -d --no-deps i1
+  esperar_i1_pronto
+}
+
+p4_ligar_tmp() {
+  if [[ "${1:-}" != --preparar ]]; then
+    [[ -t 0 ]] || erro "o I1 não vê o /tmp da placa (onde o P4 cria o socket). Rode: ./inf_a4.sh p4 --preparar"
+    echo "O I1 desta build não vê o /tmp da placa, onde o P4 cria $P4_SOCKET."
+    echo "Contorno provisório: I1_P4_DIR=/tmp no $APP.local.env (fora do Git) e recriar o i1."
+    local r; read -r -p "Aplicar agora? [s/N] " r
+    [[ "$r" == [sS]* ]] || erro "nada mudou"
+  fi
+  if [[ -f "$APP.local.env" ]] && grep -q '^I1_P4_DIR=' "$APP.local.env"; then
+    sed -i 's|^I1_P4_DIR=.*|I1_P4_DIR=/tmp|' "$APP.local.env"
+  else
+    printf '%s\nI1_P4_DIR=/tmp\n' "$P4_MARCA" >> "$APP.local.env"
+  fi
+  export I1_P4_DIR=/tmp
+  recriar_i1
+}
+
+p4_desfazer() {
+  if [[ -f "$APP.local.env" ]]; then
+    local tmp; tmp=$(mktemp)
+    grep -vxF -e "$P4_MARCA" -e 'I1_P4_DIR=/tmp' "$APP.local.env" > "$tmp" || true
+    cat "$tmp" > "$APP.local.env"; rm -f "$tmp"
+    grep -qvE '^[[:space:]]*(#|$)' "$APP.local.env" || rm -f "$APP.local.env"
+  fi
+  I1_P4_DIR=$(sed -n 's/^I1_P4_DIR=//p' "$APP.env")
+  [[ -f "$APP.local.env" ]] && grep -q '^I1_P4_DIR=' "$APP.local.env" && I1_P4_DIR=$(sed -n 's/^I1_P4_DIR=//p' "$APP.local.env")
+  export I1_P4_DIR
+  ok "contorno desfeito ($APP.local.env $([[ -f "$APP.local.env" ]] && echo 'mantido com o resto' || echo 'removido'))"
+  [[ -n "$(container_i1)" ]] && recriar_i1
+  return 0
+}
+
+# Para o P4 que este script subiu (Ctrl+C nele). Se o socket que ESTA execução criou sobrar no /tmp,
+# apaga (senão a próxima execução da SIS-2 seria recusada pelo P4); nunca toca na pasta do P4.
+parar_p4() {
+  [[ -n "$P4_PID" ]] || return 0
+  local i
+  sudo kill -INT "$P4_PID" 2>/dev/null || true
+  for i in {1..10}; do vivo "$P4_PID" || break; sleep 1; done
+  if vivo "$P4_PID"; then sudo kill -TERM "$P4_PID" 2>/dev/null || true; sleep 2; fi
+  if vivo "$P4_PID"; then sudo kill -KILL "$P4_PID" 2>/dev/null || true; fi
+  wait "$P4_PID" 2>/dev/null || true
+  P4_PID=""
+  [[ -e "$P4_SOCKET" ]] && como_p4 rm -f "$P4_SOCKET" 2>/dev/null || true
+  echo "  P4 parado"
+}
+
+# Atraso publicado - capturado (ms), sequência e sessões das detecções de um source_id
+resumo_tempos() {   # resumo_tempos <jsonl> <source_id> → "n mediana_ms max_ms sessões seq_min-seq_max"
+  python3 - "$1" "$2" <<'PY'
+import json, statistics, sys
+from datetime import datetime
+def t(s): return datetime.fromisoformat(s.replace("Z", "+00:00"))
+lat, seq, sess = [], [], set()
+for linha in open(sys.argv[1], encoding="utf-8"):
+    try: m = json.loads(linha)
+    except ValueError: continue
+    if m.get("source_id") != sys.argv[2]: continue
+    sess.add(m.get("session_id"))
+    if isinstance(m.get("sequence"), int): seq.append(m["sequence"])
+    try: lat.append((t(m["published_at"]) - t(m["captured_at"])).total_seconds() * 1000)
+    except (KeyError, TypeError, ValueError): pass
+if not lat:
+    print("0 - - 0 -"); sys.exit()
+faixa = f"{min(seq)}-{max(seq)}" if seq else "-"
+print(len(lat), round(statistics.median(lat)), round(max(lat)), len(sess), faixa)
+PY
+}
+
+p4_testar() {   # p4_testar [VIDEO] [QUADROS]
+  local video=${1:-$P4_VIDEO} quadros=${2:-$INF_P4_QUADROS} equipe=${INF_P4_EQUIPE:-INV1}
+  [[ "$quadros" =~ ^[0-9]+$ ]] || erro "QUADROS deve ser um número (recebi '$quadros')"
+  local stem; stem=$(basename "$video"); stem=${stem%.*}
+  local sid="file_$stem"   # o P4 põe este source_id no cabeçalho, e o I1 publica com ele
+
+  etapa "Conferindo"
+  aceite_conferir i1
+  checar_kafka_local
+  checar_i1_permanente
+  local p
+  for p in $I1_PACOTES; do engine_existe "$p" || erro "falta a engine de $p; rode ./inf_a4.sh engines antes"; done
+  echo "  o P4 roda como '$P4_USUARIO' (sudo -u): pode pedir a sua senha"
+  sudo -v || erro "preciso do sudo para rodar o P4 como $P4_USUARIO"
+  como_p4 test -x "$P4_DIR/venv/bin/python" -a -x "$P4_DIR/scripts/p4_demo.sh" \
+    || erro "não achei o P4 pronto em $P4_DIR (venv/bin/python e scripts/p4_demo.sh), lido como $P4_USUARIO"
+  como_p4 test -f "$video" || erro "o $P4_USUARIO não acha o vídeo $video"
+  local versao_p4 mudancas_p4
+  versao_p4=$(como_p4 git -C "$P4_DIR" log -1 --format='%h %cs %s' 2>/dev/null || echo '?')
+  mudancas_p4=$(como_p4 git --no-optional-locks -C "$P4_DIR" status --short 2>/dev/null | wc -l)
+  ok "P4 em $P4_DIR: $versao_p4 ($mudancas_p4 arquivo(s) com mudança local)"
+  if i1_ve_tmp_da_placa; then ok "o I1 vê o /tmp da placa (I1_P4_DIR=/tmp)"
+  else p4_ligar_tmp "${P4_PREPARAR:-}"; fi
+
+  # Um P4 de arquivo por vez (a trava é a do próprio p4_demo.sh)
+  como_p4 flock -n "$P4_LOCK" true \
+    || erro "já há um P4 de arquivo rodando nesta placa (trava $P4_LOCK ocupada). É da SIS-2? Combine antes de parar."
+  # Socket sem P4 rodando: sobra de outra execução. Não é desta build: não apaga, só avisa.
+  [[ ! -e "$P4_SOCKET" ]] || erro "existe $P4_SOCKET sem P4 rodando (sobra de outra execução; o P4 recusa subir com ele).
+  Ele não é desta build: peça à SIS-2 para conferir e apagar ($(stat -c '%U, %y' "$P4_SOCKET" 2>/dev/null))."
+  liberar_memoria
+
+  local ts pasta rel c1 t0
+  ts=$(date +%Y%m%d-%H%M%S)
+  pasta="resultados/p4-i1-$ts"; rel="$pasta.txt"
+  mkdir -p "$pasta"
+  ANTES="$pasta/offsets-antes.txt"; DEPOIS="$pasta/offsets-depois.txt"
+  c1=$(container_i1)
+  offsets_brutos > "$ANTES"
+  [[ -s "$ANTES" ]] || erro "não consegui contar as mensagens em $KAFKA_BROKER"
+
+  etapa "P4: tocando $video como câmera (log em $pasta/p4.log)"
+  # Encadeia com o trap da lib (arquivo temporário de segredos); parar_p4 pode rodar duas vezes
+  local trap_lib; trap_lib=$(trap -p EXIT | sed "s/^trap -- '\(.*\)' EXIT\$/\1/")
+  # shellcheck disable=SC2064
+  trap "parar_p4; $trap_lib" EXIT
+  sudo -u "$P4_USUARIO" bash -c "cd '$P4_DIR' && PYTHONDONTWRITEBYTECODE=1 P4_VIDEO_PATH='$video' exec ./scripts/p4_demo.sh video" \
+    > "$pasta/p4.log" 2>&1 < /dev/null &
+  P4_PID=$!
+  local limite=$((SECONDS + 30)) sobe=1
+  until [[ -S "$P4_SOCKET" ]]; do
+    vivo "$P4_PID" || { sobe=0; break; }
+    (( SECONDS < limite )) || { sobe=0; break; }
+    sleep 1
+  done
+  if (( sobe )); then registrar T-P4A PASSOU "P4 subiu e criou o socket" "$P4_SOCKET; $(grep -m1 -E '^Vídeo:' "$pasta/p4.log" || true)"
+  else registrar T-P4A FALHOU "P4 subiu e criou o socket" "sem $P4_SOCKET em 30 s; fim do log: $(tail -1 "$pasta/p4.log")"; fi
+
+  local leu=0
+  if (( sobe )); then
+    echo "-- leitor de teste do próprio P4 (scripts/p4_ler.sh video)"
+    if como_p4 bash -c "cd '$P4_DIR' && PYTHONDONTWRITEBYTECODE=1 ./scripts/p4_ler.sh video" > "$pasta/p4_ler.log" 2>&1 < /dev/null; then leu=1; fi
+    if (( leu )); then registrar T-P4L PASSOU "P4: um quadro lido pela memória compartilhada" "p4_ler.sh ok ($pasta/p4_ler.log)"
+    else registrar T-P4L FALHOU "P4: um quadro lido pela memória compartilhada" "$(tail -1 "$pasta/p4_ler.log")"; fi
+  fi
+
+  local sessao=0 comecou=0
+  if (( sobe )); then
+    etapa "I1: lendo do P4 (\"source\": \"video\"), $equipe, $quadros quadros"
+    t0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    publicar_comando "{\"action\": \"START\", \"squad\": \"$equipe\", \"source\": \"video\", \"source_id\": \"$sid\", \"max_frames\": $quadros}"
+    sleep 5
+    if docker logs --since "$t0" "$c1" 2>&1 | grep -q "START repetido para equipe ativa '$equipe'"; then
+      aviso "a equipe $equipe já tinha uma sessão ativa no I1 (o A4?): o I1 ignorou a fonte deste pedido"
+    fi
+    esperar_sessao "$c1" "$equipe" "$t0" 300 && sessao=1
+    docker logs --since "$t0" "$c1" > "$pasta/i1.log" 2>&1 || true
+    grep -q "Carregando" "$pasta/i1.log" && comecou=1
+  fi
+  parar_p4
+  sleep 10
+  offsets_brutos > "$DEPOIS"
+
+  etapa "Lendo as detecções novas"
+  ler_novas ods.i1.detections "$pasta/i1.detections.jsonl"
+  local c_i1 n_i1 versoes fim_sessao tempos
+  c_i1=$(contrato "ods-i1-gpu:$I1_REF" python3 /app/schemas/ods.i1.detections.v1.0.schema.json "$pasta/i1.detections.jsonl" "$sid")
+  read -r _ _ n_i1 _ <<<"$(grep '^CONTRATO' <<<"$c_i1")"
+  versoes=$(sed -n 's/^VERSOES //p' <<<"$c_i1")
+  fim_sessao=$(grep "Sessão '$equipe' encerrada" "$pasta/i1.log" 2>/dev/null | tail -1 | sed 's/.*encerrada/encerrada/' || true)
+  tempos=$(resumo_tempos "$pasta/i1.detections.jsonl" "$sid" 2>/dev/null) || tempos="0 - - 0 -"
+
+  if (( sessao )) && [[ "$fim_sessao" != *"(error)"* ]]; then registrar T-P4S PASSOU "I1 leu a sessão do P4 até o fim" "$fim_sessao"
+  elif (( sessao )); then registrar T-P4S FALHOU "I1 leu a sessão do P4 até o fim" "$fim_sessao; $(grep -m1 'Erro ao executar' "$pasta/i1.log" | cut -c1-200)"
+  elif (( comecou )); then registrar T-P4S FALHOU "I1 leu a sessão do P4 até o fim" "começou, sem 'Sessão $equipe encerrada' em 5 min ($pasta/i1.log)"
+  else registrar T-P4S FALHOU "I1 leu a sessão do P4 até o fim" "o I1 não começou ($pasta/i1.log)"; fi
+  if (( ${n_i1:-0} > 0 )); then registrar T-P4I PASSOU "I1 detecções vindas do P4" "$n_i1 mensagens com source_id $sid"
+  else registrar T-P4I FALHOU "I1 detecções vindas do P4" "nenhuma com source_id $sid"; fi
+  avaliar_contrato T-P4C "contrato ods.i1.detections (schema do I1)" "$c_i1"
+  if (( ${n_i1:-0} == 0 )); then registrar T-P4G FALHOU "I1 na GPU (TensorRT)" "sem detecções do P4 para conferir"
+  elif [[ -n "$versoes" && "$versoes" != *,* && "$versoes" == *-fp16 ]]; then registrar T-P4G PASSOU "I1 na GPU (TensorRT)" "artifact_version $versoes"
+  else registrar T-P4G FALHOU "I1 na GPU (TensorRT)" "artifact_version '${versoes:-?}' (esperado …-fp16)"; fi
+  local n med mx ns faixa
+  read -r n med mx ns faixa <<<"$tempos"
+  if (( n > 0 )); then registrar T-P4T INFO "tempo P4 → I1 (publicado − capturado)" "mediana $med ms, máx. $mx ms em $n mensagens; $ns sessão(ões) do P4; sequence $faixa"
+  else registrar T-P4T INFO "tempo P4 → I1 (publicado − capturado)" "sem mensagens para medir"; fi
+
+  local pa=0 f=0 linha
+  for linha in "${RES[@]}"; do
+    case "$(cut -d'|' -f2 <<<"$linha")" in PASSOU) pa=$((pa+1)) ;; FALHOU) f=$((f+1)) ;; esac
+  done
+  {
+    echo "P4 (SIS-2) → I1 da build inf_a4 — $(date '+%Y-%m-%d %H:%M:%S') — $(uname -n)"
+    echo "P4: $P4_DIR ($versao_p4; $mudancas_p4 mudança(s) local(is)) · vídeo $video · source_id $sid"
+    echo "I1: ${I1_REF:0:7} · equipe $equipe · $quadros quadros · Kafka $KAFKA_BROKER"
+    echo
+    for linha in "${RES[@]}"; do
+      IFS='|' read -r id r oque det <<<"$linha"
+      printf '%-6s %-7s %-42s %s\n' "$id" "$r" "$oque" "$det"
+    done
+    echo
+    echo "Obs.: com o P4 como fonte, o I1 publica com o source_id e o session_id do P4 ($sid), não com"
+    echo "os do pedido. O A4 espera a câmera $equipe."
+    echo
+    echo "Resumo: PASSOU $pa, FALHOU $f"
+  } | tee "$rel"
+  echo
+  echo "Relatório: $ODS_DIR_APP/$rel (logs do P4 e do I1 e mensagens em $pasta/)"
+  echo "O contorno I1_P4_DIR=/tmp continua ativo; para desfazer: ./inf_a4.sh p4 --desfazer"
+  (( f == 0 ))
+}
+
 # ---------------------------------------------------------------- status
 
 status() {
@@ -424,6 +675,12 @@ case "${1:-subir}" in
   i1)      shift; checar_kafka; pedir_i1 "$@" ;;
   comando) shift; checar_kafka; publicar_comando "${1:?uso: ./inf_a4.sh comando '{\"action\": \"STOP\", \"squad\": \"INV1\"}'}" ;;
   i3)      rodar i3 i3 ;;
+  p4)      shift
+           case "${1:-}" in
+             --desfazer) p4_desfazer ;;
+             --preparar) shift; P4_PREPARAR=--preparar p4_testar "$@" ;;
+             *)          p4_testar "$@" ;;
+           esac ;;
   engines) checar_gpu; checar_pasta "$I1_ENGINES_DIR" "engines TensorRT"; checar_disco; preparar_engines ;;
   contar)  contar ;;
   repos)   shift; exec "$ODS_DIR_BUILDS/../validacao/inf/testar-inf-repos.sh" --build "$APP" "$@" ;;

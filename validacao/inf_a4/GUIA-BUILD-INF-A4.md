@@ -76,6 +76,52 @@ cd builds/inf_a4
 Pela orquestração: `../ods.sh trocar inf_a4` (remove as outras builds de aplicação; o I1 permanente
 fica e a imagem dele também).
 
+### 4.0 P4 da SIS-2 → I1 (`./inf_a4.sh p4`)
+
+Confere o P4 nativo da placa (`/home/sys2/SIS-2/p4`, venv e usuário `sys2`) e a ligação dele com o I1
+desta build, numa sessão só:
+
+```bash
+./inf_a4.sh p4 [VIDEO] [QUADROS]     # padrão: P4_VIDEO (INV1.mp4 da SIS-2) e INF_P4_QUADROS (150)
+./inf_a4.sh p4 --preparar            # igual, sem perguntar antes de ligar o contorno
+./inf_a4.sh p4 --desfazer            # tira o contorno e recria o i1
+```
+
+Passos: confere o P4 (venv, vídeo, commit e mudanças locais, lidos como `sys2` por `sudo -u`); recusa se
+outro P4 de arquivo estiver rodando (trava `/tmp/p4_demo_file.lock` do próprio `p4_demo.sh`) e apaga
+socket velho; sobe o P4 (`p4_demo.sh video`) em segundo plano; lê um quadro com o `p4_ler.sh` do P4;
+pede ao I1 `"source": "video"`; espera a sessão; para o P4; lê as detecções novas no Kafka e confere o
+contrato → `resultados/p4-i1-<data>.txt` (logs do P4, do leitor e do I1 em `resultados/p4-i1-<data>/`).
+
+| Item | Confere |
+|---|---|
+| T-P4A | o P4 subiu e criou `/tmp/p4_file_shm` |
+| T-P4L | o leitor do próprio P4 recebeu um quadro pela memória compartilhada |
+| T-P4S | o I1 encerrou a sessão sem `(error)` |
+| T-P4I | há detecções com o `source_id` do P4 (`file_<vídeo>`) |
+| T-P4C | essas detecções valem no schema do I1 |
+| T-P4G | `artifact_version` termina em `-fp16` (GPU) |
+| T-P4T | informativo: mediana e máximo de `published_at − captured_at`, sessões do P4, faixa de `sequence` |
+
+- **Contorno provisório** (`I1_P4_DIR=/tmp` no `inf_a4.local.env`, fora do Git): o socket do P4 é fixo
+  no código dele, no `/tmp` da placa, e o I1 desta build vê como `/tmp` a pasta `/var/lib/ods/p4-shm`.
+  Na 1ª vez o comando pergunta antes de ligar; `--desfazer` tira só a linha dele (o resto do arquivo
+  fica). Com o contorno, o container do I1 enxerga o `/tmp` inteiro da placa.
+- **`source_id`:** com o P4 como fonte, o I1 publica com o `source_id` e o `session_id` do cabeçalho do
+  P4 (`file_INV1`), não com os do pedido. O A4 espera a câmera `INV1`: com o P4 no caminho, ele não
+  reconheceria as detecções sem combinar o nome.
+- Se o A4 estiver usando a equipe `INV1` no I1, o pedido é tratado como START repetido e a fonte é
+  ignorada: o comando avisa.
+- **Nada do P4 nem das pastas do `sys2` é alterado:** como `sys2`, o comando só lê (`test`, `git log`,
+  `git --no-optional-locks status`, que não regrava o índice) e roda os scripts do P4 com
+  `PYTHONDONTWRITEBYTECODE=1` (sem `__pycache__` na pasta dele). O que o P4 grava fica no `/tmp` da placa
+  (socket, trava e o PNG do leitor). Socket velho de outra execução não é apagado: o comando para e pede
+  para falar com a SIS-2. Só o socket criado pela própria execução é apagado, se sobrar.
+- Pede `sudo` (o P4 roda como `sys2`, e o cache de páginas é esvaziado antes da engine).
+- Validado só no notebook, com `docker`, `sudo` e P4 simulados (26/11/2026): caminho feliz, 2ª vez sem
+  recriar, trava ocupada, socket velho (para sem apagar), P4 que não sobe (nenhum START enviado), erro do I1 na pipeline
+  do P4, equipe ocupada e `--desfazer`. Falta rodar na placa.
+
 ### 4.1 Guardar no notebook e subir de lá (sem reconstruir)
 
 Os dois scripts rodam **no notebook**, dentro do clone do p3, e falam com a placa por `ssh` (uma senha
