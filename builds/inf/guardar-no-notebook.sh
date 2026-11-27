@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # guardar-no-notebook.sh — RODA NO NOTEBOOK (não na Jetson). Traz da Jetson para cá, comprimidas, as
-# imagens da build inf (I3, I6, I7, I8, I9) (P3 / SIS-1). Mesmo molde do ../inf_a4/guardar-no-notebook.sh.
+# imagens da build inf (I3, I9) (P3 / SIS-1). Mesmo molde do ../inf_a4/guardar-no-notebook.sh.
+# Desde 27/11/2026 o I6, o I7 e o I8 são das builds inf_a2, inf_a8 e inf_a1 (e o I1/I2, da inf_a4):
+# guarde cada uma com o guardar-no-notebook.sh dela.
 #
 #   ./guardar-no-notebook.sh                  cria ~/ods-imagens/inf-AAAAMMDD-HHMM/
-#   ./guardar-no-notebook.sh --com-engine     também a engine app-plates-1.0.0 do I7 (a mesma do I1)
 #   ./guardar-no-notebook.sh --comprimir-na-placa   comprime NA PLACA antes de mandar (rede lenta,
 #                                             ex.: de casa): ~metade dos bytes pela rede, usando a CPU
 #                                             da placa (com nice 19). zstd se a placa tiver; senão gzip
@@ -14,17 +15,13 @@
 # Uma senha só: as chamadas ao ssh dividem uma conexão.
 #
 # A pasta criada tem:
-#   imagens.tar.zst   docker save de ods-i3, ods-i6, ods-i7-gpu, ods-i8-publisher e ods-i9 nos
-#                     commits do inf.env (o I1 e o I2 são da inf_a4: guarde-os com o script dela;
-#                     o ods-i3 é a mesma imagem nas duas, e vai nas duas pastas)
-#   engines.tar.zst   só com --com-engine: app-plates-1.0.0 (o ../inf_a4/guardar-no-notebook.sh já
-#                     guarda todas as engines do I1, inclusive esta)
+#   imagens.tar.zst   docker save de ods-i3 e ods-i9 nos commits do inf.env (o ods-i3 é a mesma
+#                     imagem da inf_a4 e vai nas duas pastas)
 #   manifesto.txt     commits, imagens (id e tamanho), tamanho descomprimido, origem
 #   inf.env           cópia do .env usado
 #   SHA256SUMS        para conferir a cópia (sha256sum -c)
 #
-# Fica de fora: confluentinc/cp-kafka:latest (pública, o docker pull baixa) e o vídeo de QR
-# (o ./inf.sh gera de novo em VIDEO_DIR).
+# Fica de fora: confluentinc/cp-kafka:latest (pública, o docker pull baixa).
 #
 # Para subir de volta na placa (sem script próprio ainda), na pasta criada:
 #   zstd -dc imagens.tar.zst | ssh ods@172.18.4.56 docker load
@@ -38,13 +35,13 @@ JETSON=${JETSON:-ods@172.18.4.56}
 P3_JETSON=${P3_JETSON:-/opt/ods/p3}
 DESTINO=${DESTINO:-$HOME/ods-imagens}
 NIVEL=${ZSTD_NIVEL:-3}
-COM_ENGINES=0 NA_PLACA=0
+NA_PLACA=0
 for a in "$@"; do
   case "$a" in
-    --com-engine) COM_ENGINES=1 ;;
+    --com-engine) echo "--com-engine saiu em 27/11/2026: a engine do I7 vai no ../inf_a4/guardar-no-notebook.sh" >&2; exit 1 ;;
     --comprimir-na-placa) NA_PLACA=1 ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
-    *) echo "opção desconhecida: $a (use --com-engine, --comprimir-na-placa ou --help)" >&2; exit 1 ;;
+    *) echo "opção desconhecida: $a (use --comprimir-na-placa ou --help)" >&2; exit 1 ;;
   esac
 done
 
@@ -61,11 +58,9 @@ set -a
 # shellcheck source=inf.env
 source ./inf.env
 set +a
-# As mesmas do docker-compose.yml (serviços ativos; o i6-gerar-video usa a do i6)
-REFS=(I3_REF I6_REF I7_REF I8_REF I9_REF)
-IMAGENS=("ods-i3:$I3_REF" "ods-i6:$I6_REF" "ods-i7-gpu:$I7_REF" "ods-i8-publisher:$I8_REF" "ods-i9:$I9_REF")
-# Única engine que esta build lê (o I7, só leitura): a app-plates do I1
-ENGINES=(app-plates-1.0.0)
+# As mesmas do docker-compose.yml (serviços ativos desde 27/11/2026: i3 e i9)
+REFS=(I3_REF I9_REF)
+IMAGENS=("ods-i3:$I3_REF" "ods-i9:$I9_REF")
 
 # Uma conexão ssh para todas as chamadas (uma senha só)
 CTL=$(mktemp -d)
@@ -103,13 +98,13 @@ for r in "${REFS[@]}"; do
   na_placa=$(sed -n "s/^$r=//p" <<<"$env_placa")
   [[ "$na_placa" == "${!r}" ]] || erro "$r difere: aqui ${!r:0:7}, na placa ${na_placa:0:7}. Deixe os dois p3 no mesmo commit (git pull)."
 done
-ok "commits iguais aos da placa: I3 ${I3_REF:0:7} · I6 ${I6_REF:0:7} · I7 ${I7_REF:0:7} · I8 ${I8_REF:0:7} · I9 ${I9_REF:0:7}"
+ok "commits iguais aos da placa: I3 ${I3_REF:0:7} · I9 ${I9_REF:0:7}"
 
 declare -A ID=() TAM=()
 total=0
 for img in "${IMAGENS[@]}"; do
   info=$("${SSH[@]}" "docker image inspect --format '{{.Id}} {{.Size}}' '$img'" 2>/dev/null) \
-    || erro "a imagem $img não existe na placa. Suba a build lá antes (./inf.sh; o I7 e o I8 só são construídos no primeiro ./inf.sh testar ou ./inf.sh i7/i8)"
+    || erro "a imagem $img não existe na placa. Suba a build lá antes (./inf.sh; o I3 só é construído no primeiro ./inf.sh testar ou ./inf.sh i3)"
   read -r id tam <<<"$info"
   ID[$img]=$id; TAM[$img]=$tam
   total=$((total + tam))
@@ -127,7 +122,7 @@ rm -rf "$PARCIAL"; mkdir -p "$PARCIAL"
 case "$COMP" in
   "") rota="rede → zstd aqui" ;; zstd) rota="zstd na placa → rede" ;; *) rota="$COMP na placa → rede → zstd aqui" ;;
 esac
-etapa "Imagens: docker save na placa → $rota (alguns minutos; a do I7 é a maior)"
+etapa "Imagens: docker save na placa → $rota (alguns minutos)"
 trazer "docker save ${IMAGENS[*]}" "$PARCIAL/imagens.tar.zst" \
   || erro "a cópia das imagens falhou; nada foi guardado (apague $PARCIAL)"
 ok "imagens.tar.zst: $(du -h "$PARCIAL/imagens.tar.zst" | cut -f1)"
@@ -145,25 +140,6 @@ tags=$(zstd -dc "$PARCIAL/imagens.tar.zst" | tar -xOf - manifest.json | grep -oE
   || erro "o tar tem as tags '$tags', esperava ${IMAGENS[*]}"
 ok "tar íntegro: ${#IMAGENS[@]} imagens, $((bytes / 1024 / 1024)) MB descomprimido"
 
-engines_ok=()
-if (( COM_ENGINES )); then
-  etapa "Engine do I7 ($ENGINES_DIR na placa)"
-  # As pastas das engines podem ser só do root: lê por um container (a imagem do I3 já tem tar).
-  LER=(docker run --rm --network none --entrypoint sh -v "$ENGINES_DIR:/e:ro" "ods-i3:$I3_REF")
-  existentes=$("${SSH[@]}" "${LER[*]} -c 'cd /e && ls -1d */ 2>/dev/null'" | tr -d '/' || true)
-  for e in "${ENGINES[@]}"; do
-    if grep -qx "$e" <<<"$existentes"; then engines_ok+=("$e"); else aviso "engine $e não existe na placa (fica de fora)"; fi
-  done
-  if (( ${#engines_ok[@]} )); then
-    trazer "${LER[*]} -c \"tar -C /e -cf - ${engines_ok[*]}\"" "$PARCIAL/engines.tar.zst" \
-      || erro "a cópia das engines falhou"
-    zstd -dc "$PARCIAL/engines.tar.zst" | tar -tf - >/dev/null || erro "o tar das engines está corrompido"
-    ok "engines.tar.zst: ${engines_ok[*]} ($(du -h "$PARCIAL/engines.tar.zst" | cut -f1))"
-  else
-    aviso "nenhuma engine para guardar: a inf_a4 compila a app-plates na subida dela (~7 min)"
-  fi
-fi
-
 etapa "Manifesto"
 cp inf.env "$PARCIAL/inf.env"
 {
@@ -175,8 +151,6 @@ cp inf.env "$PARCIAL/inf.env"
   for r in "${REFS[@]}"; do echo "$r=${!r}"; done
   echo "BYTES_DESCOMPRIMIDOS=$bytes"
   for img in "${IMAGENS[@]}"; do echo "IMAGEM=$img ${ID[$img]} ${TAM[$img]}"; done
-  echo "ENGINES_DIR=$ENGINES_DIR"
-  echo "ENGINES=${engines_ok[*]}"
 } > "$PARCIAL/manifesto.txt"
 (cd "$PARCIAL" && sha256sum ./*.tar.zst manifesto.txt inf.env > SHA256SUMS)
 mv "$PARCIAL" "$PASTA"

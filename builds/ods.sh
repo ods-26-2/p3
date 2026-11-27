@@ -13,8 +13,8 @@
 #                                  inf_a8: I7 contínuo para o A8, inf_a2: I6 contínuo para o A2,
 #                                  inf_a1: I8 contínuo para o A1, todas no Kafka da nuvem)
 #                                  (a build permanente do I1 fica de pé e com a imagem)
-#                                  "trocar inf" mantém e sobe antes a inf_a4: a inf usa o I1 e o
-#                                  I2 dela (27/11/2026)
+#                                  "trocar inf" mantém e sobe antes a inf_a4, a inf_a1, a inf_a2 e a
+#                                  inf_a8: a inf usa o I1/I2, o I8, o I6 e o I7 delas (27/11/2026)
 #                                  inf_a1, inf_a2, inf_a4 e inf_a8 atendem as aplicações da NUVEM e convivem:
 #                                  trocar para uma delas (ou para a inf) não derruba as outras. Trocar para
 #                                  uma aplicação (a1 … a8) derruba todas elas
@@ -45,9 +45,9 @@ apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/ "$DIR"/inf_a1/ "$DIR"/inf
 # Serviços permanentes (ex.: i1): aparecem na lista, mas o "trocar" não os remove.
 permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; return 0; }
 
-# Build sobre a qual outra roda: o "trocar" não a remove e a sobe antes (a inf usa o I1 e o I2 da
-# inf_a4 desde 27/11/2026).
-base_de() { case "$1" in inf) echo inf_a4 ;; esac; return 0; }
+# Builds sobre as quais outra roda: o "trocar" não as remove e as sobe antes, nesta ordem (a inf usa
+# o I1/I2 da inf_a4 e, desde 27/11/2026, o I8, o I6 e o I7 contínuos da inf_a1, inf_a2 e inf_a8).
+base_de() { case "$1" in inf) echo inf_a4 inf_a1 inf_a2 inf_a8 ;; esac; return 0; }
 # Builds que servem as aplicações da nuvem (27/11/2026): ficam de pé quando a troca é para uma
 # delas ou para a inf (a A4 e a A8 da nuvem não perdem as inferências).
 NUVEM=(inf_a1 inf_a2 inf_a4 inf_a8)
@@ -128,9 +128,10 @@ trocar() {
     esac
   done
 
-  local base; base=$(base_de "$nova")
+  local bases=() b
+  read -ra bases <<<"$(base_de "$nova")"
   local -A fica=(["$nova"]=1)
-  [[ -n "$base" ]] && fica[$base]=1
+  for b in "${bases[@]}"; do fica[$b]=1; done
   local c
   for c in $(convivem_com "$nova"); do fica[$c]=1; done
   local manter=() app
@@ -152,11 +153,11 @@ trocar() {
   done
   (( removidas )) || ok "nenhuma outra build ocupa a placa"
 
-  if [[ -n "$base" ]]; then
+  for b in "${bases[@]}"; do
     echo
-    echo "== Subindo a base do $nova: $base (o que já está de pé não é reconstruído)"
-    "$DIR/$base/$base.sh" subir
-  fi
+    echo "== Subindo a base do $nova: $b (o que já está de pé não é reconstruído)"
+    "$DIR/$b/$b.sh" subir
+  done
 
   echo
   echo "== Subindo o $nova"

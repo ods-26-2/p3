@@ -1,6 +1,6 @@
 """i7_continuo.py — P3 / SIS-1: roda o I7 (--video) no ritmo do vídeo, como se fosse uma câmera.
 
-O I7 (1441bbb, scripts/aplicacaoModelov5-fast+rodosol.py) processa um vídeo o mais rápido que
+O I7 (development 9e24056; também a main 1441bbb, scripts/aplicacaoModelov5-fast+rodosol.py) processa um vídeo o mais rápido que
 consegue e carimba captured_at com a hora da leitura. Para a build inf_a8, o vídeo faz o papel da
 câmera da entrada do A8: com I7_TEMPO_REAL=sim, cada leitura de quadro espera o instante dele no
 vídeo (fps do próprio arquivo), e os carros chegam ao A8 no tempo do vídeo, sem rajada.

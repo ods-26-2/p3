@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
-# inf.sh — build "inf": todas as inferências (I1–I9) numa build só (P3 / SIS-1).
+# inf.sh — build "inf": todas as inferências (I1–I9) da placa (P3 / SIS-1).
+#
+# Desde 27/11/2026 a inf roda SOBRE as builds das aplicações da nuvem (o ../ods.sh trocar inf sobe
+# todas antes): inf_a4 (I1 + I2), inf_a1 (I8 contínuo), inf_a2 (I6 contínuo), inf_a8 (I7 contínuo).
+# Aqui ficam o I9 contínuo e o I3 da quadra de teste (sob demanda).
 #
 #   ./inf.sh               o mesmo que ./inf.sh subir
-#   ./inf.sh subir         confere a placa e o I1/I2 da inf_a4, baixa o código, constrói o que falta
-#                          (em etapas, com limpeza) e sobe os contínuos: i6, i9
-#   ./inf.sh subir --reconstruir   reconstrói todas as imagens
+#   ./inf.sh subir         confere a placa e as builds da nuvem, baixa o código, constrói o que
+#                          falta (em etapas, com limpeza) e sobe o contínuo daqui: i9
+#   ./inf.sh subir --reconstruir   reconstrói as imagens daqui
 #   ./inf.sh i1 [EQUIPE] [QUADROS] pede detecções ao I1 da inf_a4 por ods.i1.command
 #                          (padrão: INF_I1_EQUIPE e INF_I1_QUADROS do inf.env; equipes do I1:
 #                          VER5 placas, VER3/VER6 EPI, VER1 indústria, INV1 esporte)
-#   ./inf.sh i3            calibração da quadra do A4 → ods.i3.calibration + ods.artifact.published
+#   ./inf.sh i3            calibração da quadra de teste → ods.i3.calibration + ods.artifact.published
+#   (I6, I7 e I8 são os contínuos da inf_a2, da inf_a8 e da inf_a1: ../inf_aX/inf_aX.sh status)
 #   (I4 fora da build desde 27/11/2026 e I5 desde 24/11/2026: ver o docker-compose.yml)
-#   ./inf.sh i7            lê placas de VIDEO_DIR/I7_VIDEO → ods.i7.plate_read (detector na GPU,
-#                          com a engine app-plates que o I1 compila)
-#   ./inf.sh i8            publica os 4 eventos de exemplo do I8 → ods.industria.defeito_classificado
 #   ./inf.sh contar        mensagens por tópico das inferências
-#   ./inf.sh testar        dispara todas e confere cada tópico → resultados/aceite-inf-*.txt
-#   ./inf.sh log <serviço> acompanha o log de um serviço (Ctrl+C para sair)
-#   ./inf.sh status        containers, I1, memória, disco e Kafka
-#   ./inf.sh parar         derruba a build (o I1 e o I2 continuam de pé: são da inf_a4)
+#   ./inf.sh testar        dispara I1 e I3, espera as mensagens novas de I2, I6, I7, I8 e I9 e
+#                          confere cada tópico → resultados/aceite-inf-*.txt
+#   ./inf.sh log <serviço> acompanha o log de um serviço daqui (Ctrl+C para sair)
+#   ./inf.sh status        containers daqui e das builds da nuvem, memória, disco e Kafka
+#   ./inf.sh parar         derruba só esta build (as da nuvem continuam de pé)
 #
-# Base (27/11/2026): o I1 e o I2 são os da build inf_a4, que tem de estar de pé
-# (../inf_a4/inf_a4.sh). O I1 permanente (builds/i1) fica parado.
+# O I1 permanente (builds/i1) fica parado.
 #
 # Para remover a build da placa: ./limpar.sh (veja ./limpar.sh --help)
 # Variáveis opcionais: MIN_LIVRE_GB (padrão 4), ESPERA_S (padrão 300)
 APP=inf
 SEGREDOS=()
-# Menores primeiro, as maiores (torch) por último e sozinhas: o disco da Jetson é pequeno.
-# I5 fora (24/11/2026): para voltar, "i5" de novo entre "i4" e "i7"
-# I2 fora (27/11/2026): é o da inf_a4
-# I4 fora (27/11/2026): para voltar, ("i3 i6 i9 i4-video" "i8" "i4-server" "i4" "i7")
-ETAPAS=("i3 i6 i9" "i8" "i7")
+# I5 fora (24/11/2026), I4 fora (27/11/2026): para voltar, ("i3 i9 i4-video" "i4-server" "i4")
+# I2 é o da inf_a4; I6, I7 e I8, os da inf_a2, inf_a8 e inf_a1 (27/11/2026)
+ETAPAS=("i3 i9")
 ONESHOT=(kafka-topicos)
 
 # shellcheck source=../comum/lib.sh
@@ -75,27 +75,46 @@ checar_i1() {
   return 0
 }
 
-# ---------------------------------------------------------------- conferências
+# I6, I7 e I8: os contínuos das builds da nuvem (27/11/2026). build|serviço|o que faz
+NUVEM_SERVICOS=("inf_a2|i6|ods.i6.code_read|I6 QR do A2" "inf_a8|i7|ods.i7.plate_read|I7 placas do A8"
+                "inf_a1|i8|ods.industria.defeito_classificado|I8 peças do A1")
+# Tópicos dos contínuos que o checar_nuvem achou rodando (o teste só espera por esses)
+NUVEM_RODANDO=()
 
-# O I7 roda o detector na GPU com a engine que a build do I1 compila (I1_PACOTES).
-checar_gpu_i7() {
-  docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"' \
-    || erro "o Docker desta placa não tem o runtime nvidia; o I7 (TensorRT) não roda sem ele"
-  [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]] \
-    || erro "falta a engine $ENGINES_DIR/app-plates-1.0.0 do I7 (a mesma do I1). Compile com: ../inf_a4/inf_a4.sh engines"
+# Confere um contínuo de outra build: de pé e no MESMO broker (procura o endereço em qualquer
+# variável KAFKA* do container). Devolve 1 se não estiver rodando.
+checar_continuo() {   # checar_continuo <build> <serviço> <descrição>
+  local c estado
+  c=$(container_de "ods-$1" "$2")
+  if [[ -z "$c" ]]; then
+    aviso "$3: a build $1 não está nesta placa (../$1/$1.sh, ou ../ods.sh trocar inf, que sobe todas)"
+    return 1
+  fi
+  estado=$(docker inspect -f '{{.State.Status}}' "$c")
+  if [[ "$estado" != running ]]; then aviso "$3 ($1) está $estado: ../$1/$1.sh"; return 1; fi
+  docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c" | grep -E '^KAFKA[A-Z_]*=' \
+    | grep -qF "$KAFKA_BROKER" \
+    || aviso "$3 ($1) não usa o Kafka $KAFKA_BROKER: as mensagens dele não aparecem na contagem daqui"
+  ok "$3 ($1) rodando"
 }
+
+checar_nuvem() {
+  local s b sv tp d
+  NUVEM_RODANDO=()
+  for s in "${NUVEM_SERVICOS[@]}"; do
+    IFS='|' read -r b sv tp d <<<"$s"
+    if checar_continuo "$b" "$sv" "$d"; then NUVEM_RODANDO+=("$tp"); fi
+  done
+  return 0
+}
+
+# ---------------------------------------------------------------- conferências
 
 checar_entradas() {
   checar_i1
-  [[ -d "$VIDEO_DIR" ]] || erro "falta a pasta $VIDEO_DIR (a do I1). Rode antes: ../i1/i1.sh videos"
-  [[ -w "$VIDEO_DIR" ]] || aviso "sem escrita em $VIDEO_DIR: o vídeo de QR do I6 não poderá ser gerado.
-  Uma vez só: sudo chown $(id -un) $VIDEO_DIR"
-  entrada_arquivo "$VIDEO_DIR/$I7_VIDEO" "vídeo do I7" "o ./inf.sh i7 não terá o que ler"
-  if [[ -d "$ENGINES_DIR/app-plates-1.0.0" ]]; then ok "engine do I7 (GPU): $ENGINES_DIR/app-plates-1.0.0"
-  else aviso "sem a engine $ENGINES_DIR/app-plates-1.0.0: o ./inf.sh i7 não roda até ../inf_a4/inf_a4.sh engines"; fi
-  # I4_VIDEO e I5_AUDIO_DIR ficam nos clones: no primeiro "subir" ainda não existem.
-  # I4 fora: [[ -d "$SRC_DIR/i4" ]] && entrada_arquivo "$I4_VIDEO" "vídeo do I4" "o ./inf.sh i4 não terá o que mandar"
-  # I5 fora: [[ -d "$SRC_DIR/i5" ]] && entrada_arquivo "$I5_AUDIO_DIR/$I5_AUDIO" "áudio do I5" "o ./inf.sh i5 não terá o que mandar"
+  checar_nuvem
+  [[ -d "$VIDEO_DIR" ]] || aviso "falta a pasta $VIDEO_DIR (vídeos do P3 pedidos ao I1). Rode antes: ../i1/i1.sh videos"
+  # I4 e I5 fora: os clones e as entradas deles não são conferidos
   livre_ram_mb >/dev/null
   return 0
 }
@@ -103,26 +122,16 @@ checar_entradas() {
 livre_ram_mb() {
   local mb; mb=$(awk '/^MemAvailable/ {print int($2/1024)}' /proc/meminfo)
   echo "$mb"
-  # Com o I1 (TensorRT), o Kafka e os contínuos daqui, a placa de 7,4 GB fica no limite.
+  # Com o I1 e o I7 (TensorRT), o Kafka e os contínuos, a placa de 7,4 GB fica no limite.
   (( mb >= 1500 )) || aviso "só ${mb} MB de memória disponível: o TensorRT do I1 pode falhar (OUT_OF_MEMORY)" >&2
 }
 
 # ---------------------------------------------------------------- depois do "up"
 
-gerar_video_qr() {
-  [[ "$I6_VIDEO" == inf-qr.mp4 ]] || return 0
-  [[ -f "$VIDEO_DIR/inf-qr.mp4" ]] && return 0
-  dc --profile i6 run --rm -T i6-gerar-video || aviso "não gerei $VIDEO_DIR/inf-qr.mp4: o I6 fica sem vídeo"
-}
-
 pos_subida() {
-  etapa "Entradas"
-  gerar_video_qr
-  entrada_arquivo "$VIDEO_DIR/$I6_VIDEO" "vídeo do I6 (relido em laço)" "o I6 fica tentando abrir"
   echo
-  echo "Contínuos de pé. Para disparar cada inferência: ./inf.sh i1 | i3 | i7 | i8"
-  echo "Tudo de uma vez, conferindo os tópicos: ./inf.sh testar"
-  # I4 fora: echo "Webcam no I4: python webcam.py --url ws://<placa>:18080/ws/video (I4_SERVER_BIND=$I4_SERVER_BIND)"
+  echo "I9 de pé. I1/I2 (inf_a4), I6 (inf_a2), I7 (inf_a8) e I8 (inf_a1) são das builds da nuvem."
+  echo "Para disparar: ./inf.sh i1 | i3 · tudo de uma vez, conferindo os tópicos: ./inf.sh testar"
 }
 
 # ---------------------------------------------------------------- disparos
@@ -178,12 +187,15 @@ delta() {   # delta <tópico>: mensagens novas entre as duas contagens
   echo $(( ${d:-0} - ${a:-0} ))
 }
 
-esperar_topico() {   # esperar_topico <tópico> <segundos>: até chegar mensagem nova
-  local limite=$((SECONDS + $2))
+esperar_topicos() {   # esperar_topicos <segundos> <tópico>...: até todos terem mensagem nova
+  local limite=$((SECONDS + $1)) t falta; shift
   while (( SECONDS < limite )); do
     offsets > "$DEPOIS"
-    (( $(delta "$1") > 0 )) && return 0
-    sleep 10
+    falta=()
+    for t in "$@"; do (( $(delta "$t") > 0 )) || falta+=("$t"); done
+    (( ${#falta[@]} )) || return 0
+    echo "  esperando: ${falta[*]} ($(( limite - SECONDS )) s)"
+    sleep 15
   done
   return 1
 }
@@ -193,8 +205,9 @@ testar() {
   # I5 fora: voltar a conferir o i5 aqui
   # I2 fora (27/11/2026): o da inf_a4, conferido no checar_i1
   # I4 fora (27/11/2026): aceite_conferir i4-server i4 i6 i9
-  aceite_conferir i6 i9
+  aceite_conferir i9
   checar_i1
+  checar_nuvem
   local c1; c1=$(container_i1)
   [[ -n "$c1" && "$(docker inspect -f '{{.State.Status}}' "$c1")" == running ]] \
     || erro "o I1 da inf_a4 não está rodando; suba com ../inf_a4/inf_a4.sh antes do teste"
@@ -211,23 +224,20 @@ testar() {
 
   etapa "Disparos"
   pedir_i1 "$INF_I1_EQUIPE" "$INF_I1_QUADROS" "inf-teste-$ts"
-  local cod_i3=0 cod_i8=0 cod_i5=0 cod_i4=0 cod_i7=0
+  local cod_i3=0
   echo "-- I3";  rodar i3 i3  || cod_i3=$?
-  echo "-- I8";  rodar i8 i8  || cod_i8=$?
   # I5 fora: echo "-- I5 (áudio como P5)"; rodar i5 i5-audio || cod_i5=$?
   # I4 fora: echo "-- I4 (vídeo como webcam)"; rodar i4 i4-video || cod_i4=$?
 
-  etapa "Esperando o I1/I9"
-  esperar_topico ods.i9.ppe_compliance 180 || true
-  sleep 30
-  # Só depois do I1: os dois usam a GPU, que divide a RAM da placa
-  echo "-- I7 (placas no vídeo, GPU)"
-  # Subshell: o erro (sem GPU/engine) vira falha do T-I7 em vez de encerrar o teste
-  if (checar_gpu_i7); then rodar i7 i7 2>&1 | tee resultados/.i7.log || cod_i7=$?; else cod_i7=99; fi
-  # Prova de TensorRT: a versão do detector vem da engine do P2 (…-fp16); em CPU seria …-fp32
-  local versao_i7
-  versao_i7=$(grep -o 'artifact_version=[^ |]*' resultados/.i7.log 2>/dev/null | tail -1 | cut -d= -f2 || true)
-  rm -f resultados/.i7.log
+  # I6, I7 e I8 publicam sozinhos (builds da nuvem): só esperamos as mensagens novas, juntas
+  etapa "Esperando I1/I2/I9 e os contínuos da nuvem (até ${INF_ESPERA_NUVEM_S:-420} s)"
+  # Só os contínuos que estão rodando: build ausente já vira FALHOU sem gastar a espera
+  esperar_topicos "${INF_ESPERA_NUVEM_S:-420}" ods.i1.detections ods.i2.tracks ods.i9.ppe_compliance \
+    "${NUVEM_RODANDO[@]}" || true
+  # Prova de TensorRT do I7 da inf_a8: a versão do detector termina em -fp16 (em CPU seria -fp32)
+  local versao_i7 c7
+  c7=$(container_de ods-inf_a8 i7)
+  versao_i7=$( [[ -n "$c7" ]] && docker logs --tail 3000 "$c7" 2>&1 | grep -o 'artifact_version=[^ |]*' | tail -1 | cut -d= -f2 || true)
   offsets > "$DEPOIS"
   local ram_depois restarts_depois oom
   ram_depois=$(livre_ram_mb)
@@ -261,18 +271,17 @@ testar() {
   # elif (( d > 0 )); then registrar T-I5 PASSOU "I5 transcrição" "$d mensagens (audio_chunk +$(delta ods.p5.audio_chunk))"
   # elif [[ "$I5_MODO" == wake-word ]]; then registrar T-I5 AVISO "I5 transcrição" "nenhuma; modo wake-word: o áudio diz \"lexie\"?"
   # else registrar T-I5 FALHOU "I5 transcrição" "nenhuma (dc logs i5)"; fi
+  # I6, I7 e I8: contínuos das builds da nuvem
   d=$(delta ods.i6.code_read)
-  if (( d > 0 )); then registrar T-I6 PASSOU "I6 QR" "$d leituras de $I6_VIDEO"
-  else registrar T-I6 FALHOU "I6 QR" "nenhuma leitura (dc logs i6)"; fi
+  if (( d > 0 )); then registrar T-I6 PASSOU "I6 QR (inf_a2)" "$d leituras"
+  else registrar T-I6 FALHOU "I6 QR (inf_a2)" "nenhuma leitura (../inf_a2/inf_a2.sh status)"; fi
   d=$(delta ods.i7.plate_read)
-  if (( cod_i7 == 99 )); then registrar T-I7 FALHOU "I7 placas (GPU)" "sem runtime nvidia ou sem a engine app-plates-1.0.0"
-  elif (( cod_i7 != 0 )); then registrar T-I7 FALHOU "I7 placas (GPU)" "terminou com código $cod_i7"
-  elif [[ "$versao_i7" != *-fp16* ]]; then registrar T-I7 FALHOU "I7 placas (GPU)" "não rodou em TensorRT (artifact_version=${versao_i7:-?})"
-  elif (( d > 0 )); then registrar T-I7 PASSOU "I7 placas (GPU)" "$d leituras em $I7_QUADROS quadros de $I7_VIDEO ($versao_i7)"
-  else registrar T-I7 AVISO "I7 placas (GPU)" "rodou em TensorRT, sem leitura com confiança >= 0,9 em $I7_QUADROS quadros"; fi
+  if (( d == 0 )); then registrar T-I7 FALHOU "I7 placas (inf_a8, GPU)" "nenhuma leitura (../inf_a8/inf_a8.sh status)"
+  elif [[ "$versao_i7" != *-fp16* ]]; then registrar T-I7 FALHOU "I7 placas (inf_a8, GPU)" "$d leituras, mas não em TensorRT (artifact_version=${versao_i7:-?})"
+  else registrar T-I7 PASSOU "I7 placas (inf_a8, GPU)" "$d leituras ($versao_i7)"; fi
   d=$(delta ods.industria.defeito_classificado)
-  if (( cod_i8 == 0 && d >= 4 )); then registrar T-I8 PASSOU "I8 eventos de exemplo" "+$d"
-  else registrar T-I8 FALHOU "I8 eventos de exemplo" "código $cod_i8, +$d (esperado 4)"; fi
+  if (( d > 0 )); then registrar T-I8 PASSOU "I8 eventos (inf_a1)" "+$d (eventos de exemplo do I8)"
+  else registrar T-I8 FALHOU "I8 eventos (inf_a1)" "nenhum (../inf_a1/inf_a1.sh status)"; fi
   d=$(delta ods.i9.ppe_compliance)
   if (( d > 0 )); then registrar T-I9 PASSOU "I9 conformidade de EPI" "$d mensagens"
   elif [[ "$INF_I1_EQUIPE" != VER3 && "$INF_I1_EQUIPE" != VER6 ]]; then registrar T-I9 AVISO "I9 conformidade de EPI" "nenhuma; o I1 rodou $INF_I1_EQUIPE, sem classes de EPI"
@@ -317,8 +326,15 @@ status() {
   fi
   local c2; c2=$(container_i2)
   echo "I2 (inf_a4): $([[ -n "$c2" ]] && docker inspect -f '{{.State.Status}}' "$c2" || echo 'ausente')"
+  local s b sv tp d c
+  for s in "${NUVEM_SERVICOS[@]}"; do
+    IFS='|' read -r b sv tp d <<<"$s"
+    c=$(container_de "ods-$b" "$sv")
+    echo "$d ($b): $([[ -n "$c" ]] && docker inspect -f '{{.State.Status}}, {{.RestartCount}} reinícios' "$c" || echo 'ausente')"
+  done
   local ids
-  mapfile -t ids < <(docker ps -q --filter label=com.docker.compose.project=ods-inf; [[ -n "$c1" ]] && echo "$c1")
+  mapfile -t ids < <(for p in ods-inf ods-inf_a4 ods-inf_a1 ods-inf_a2 ods-inf_a8; do
+    docker ps -q --filter label=com.docker.compose.project="$p"; done)
   (( ${#ids[@]} )) && docker stats --no-stream --format '  {{.Name}}: {{.MemUsage}}' "${ids[@]}" 2>/dev/null
   echo "Memória disponível: $(livre_ram_mb 2>/dev/null) MB"
   echo
@@ -339,8 +355,8 @@ case "${1:-subir}" in
   i4)     erro "o I4 está fora da build inf (27/11/2026); veja o docker-compose.yml" ;;
   # I5 fora: i5)     rodar i5 i5-audio; echo "Transcrição em ods.i5.transcript em alguns segundos: ./inf.sh log i5" ;;
   i5)     erro "o I5 está fora da build inf (24/11/2026); veja o docker-compose.yml" ;;
-  i7)     checar_gpu_i7; rodar i7 i7 ;;
-  i8)     rodar i8 i8 ;;
+  i6|i7|i8)
+          erro "o $1 é o contínuo da build $(case $1 in i6) echo inf_a2 ;; i7) echo inf_a8 ;; *) echo inf_a1 ;; esac) desde 27/11/2026 (../inf_aX/inf_aX.sh status | log | testar)" ;;
   contar) contar ;;
   log)    shift; dc logs -f --tail 50 "${1:?uso: ./inf.sh log <serviço>}" ;;
   *)      ods_principal "$@" ;;

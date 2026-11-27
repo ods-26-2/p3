@@ -113,6 +113,8 @@ services:
       PRE_NITIDEZ: "0"
       PRE_PROPORCAO: "2"
       PASTA_SAIDA: /saidas
+      # (development 9e24056) só grava o mosaico dos quadros com leitura publicada: menos disco
+      SALVAR_MOSAICOS: publicados
       PUBLICACAO_MODO: kafka
       KAFKA_BROKER: ${KAFKA_BROKER}
       KAFKA_TOPICO: ods.i7.plate_read

@@ -31,8 +31,8 @@ cada pedido** (o mais novo em cima em cada seção).
 | `i1` (permanente) | orquestrador do I1 | nuvem | **Fica parado** (decisão de 27/11: a `inf` usa o I1 da `inf_a4`) | 24/11: `testar` PASSOU 16, AVISO 1 |
 | `inf_a1` | I8 **contínuo** (4 eventos de exemplo do I8, SINTÉTICOS, a cada 60 s) para o A1 da nuvem; I1 VER1 sob demanda pela `inf_a4` | nuvem | **Nova em 27/11, não rodada na placa** | — (só no notebook) |
 | `inf_a2` | I6 **contínuo** (vídeo de QR do P3, aceito pelas regras do A2, `cam0`) para o A2 da nuvem | nuvem | **Nova em 27/11, não rodada na placa** | — (só no notebook) |
-| `inf_a8` | I7 **contínuo** (VER5.mp4 em laço, no ritmo do vídeo, `cam-entrada`) para o A8 da nuvem; I1 VER5 sob demanda pela `inf_a4` | nuvem | **De pé na placa**; falta comprimir e copiar para o notebook (`./guardar-no-notebook.sh`) | **27/11 (nuvem, `cam0.mp4`): `testar` PASSOU 5/0/0** |
-| `inf` | I3, I6, I7, I8, I9 **sobre a `inf_a4`** (usa o I1 e o I2 dela desde 27/11); **I4 e I5 fora** | nuvem | De pé (sobre a `inf_a4`) | **27/11 (nuvem): `testar` PASSOU 8, FALHOU 0, AVISO 2** (I4, I5 fora) |
+| `inf_a8` | I7 **contínuo** (`development` `9e24056` desde 27/11, tarde; cam0.mp4 em laço, no ritmo do vídeo, `cam-entrada`) para o A8 da nuvem; I1 VER5 sob demanda pela `inf_a4` | nuvem | **De pé na placa**; falta comprimir e copiar para o notebook (`./guardar-no-notebook.sh`) | **27/11 (nuvem, `cam0.mp4`): `testar` PASSOU 5/0/0** |
+| `inf` | **Desde 27/11 (tarde) sobre as builds da nuvem**: I1/I2 da `inf_a4`, I8 da `inf_a1`, I6 da `inf_a2`, I7 da `inf_a8`; aqui só o I9 contínuo (`249ac83`, Dockerfile da equipe) e o I3 sob demanda; **I4 e I5 fora** | nuvem | **Arranjo novo sem commit e não rodado na placa** (na placa segue o de manhã) | 27/11 (manhã, nuvem, com I6/I7/I8 próprios): PASSOU 8/0/2. Arranjo novo: só simulação (8/0/2) |
 | `a8` | A8 + cadeia P4 → I1 → I2 → S1 → S4/S5 + I7 | placa | Referência | 14/11: PASSOU 11, FALHOU 2 (esperados). Imagens guardadas no PC em 25/11 |
 | `a5` | A5 + P4 → I1 (EPI) → I9/I2 → S1, S3, S4 | placa | Validada com falhas conhecidas | 18/11: PASSOU 9, FALHOU 2, BLOQUEADO 1, AVISO 1 |
 | `a2` | A2 + I6 + S4 | placa | Preparada em 17/11, **alterações sem commit**, nunca rodada | — |
@@ -45,6 +45,8 @@ cada pedido** (o mais novo em cima em cada seção).
 
 | Data | Pedido | Resultado |
 |---|---|---|
+| 27/11 | Regra: se o código mais apto está numa branch diferente da `main`, a build usa essa branch. Commit e listar no documento os A's prontos, em teoria | Conferidas todas as branches de cada I: só o **I7** tinha branch mais apta (`development` `9e24056`, que contém toda a `main`): a `inf_a8` passou a usá-la (validação do contrato antes de publicar, `SALVAR_MOSAICOS=publicados`); compila e o evento dela passa no `validar_i7.py` (notebook); **imagem nova a construir na placa**. I1 já na `develop`; a `develop` do I6 e a do I8 são mais antigas. Seção 4 do [`situacao_componentes.md`](situacao_componentes.md): **prontas A8 e A4** (validadas na placa), **em teoria A2 e A1** (A1 com eventos sintéticos), **não prontas A5, A3, A6, A7**. Commit feito |
+| 27/11 | Grupos postaram correções: atualizar a `inf`; rever o que fica sob demanda (como o I7 do A8, que precisava ser contínuo); garantir que as infs atendam aos A's da nuvem; ver se algum I depende de P ou B na placa; falhas no journal; gerar `situacao_componentes.md` | Mudaram I4 (`d6a2185`), I5 (`aabe73b`), I9 (`249ac83`), P4 (`2b136d1`, MP4 em laço) e A5 (`fe2b9a1`). Decisões do usuário: **a `inf` roda sobre as `inf_aX`** (o `trocar inf` sobe `inf_a4`, `inf_a1`, `inf_a2`, `inf_a8`; a `inf` fica com I9 contínuo + I3 sob demanda) e **I4/I5 atualizados nos comentários, mas fora**. Feito: `inf.env`, compose (I9 com o Dockerfile da equipe), `inf.sh` (testar espera os contínuos da nuvem), `ods.sh`, `guardar-no-notebook.sh`, `testar-inf-repos.sh` (R-I6 com o `test_i6.py`; R-I2 corrigido), guia, README e [`situacao_componentes.md`](situacao_componentes.md). Validado só no notebook e em simulação. **Falhas encontradas: §5.1** |
 | 27/11 | `subir-do-notebook.sh` da `inf_a8` rodado com a pasta da `inf_a4` | Recusou por acaso (I7_REF vazio), sem enviar nada. Os 4 `subir-do-notebook.sh` agora leem o manifesto e recusam pasta de outra build, indicando o script certo (sem commit) |
 | 27/11 | A `inf_a4` serve o A4 tão bem quanto a `inf_a8` serve o A8? | O modelo está certo: sob demanda, porque o A4 comanda o I1 (START no início da partida, HEARTBEAT a cada 20 s, STOP no fim, envelope CMD que o orquestrador `3b2a9cc` aceita), e ele cronometra pelo `frame_index` (dispensa o ritmo). **Falha:** o INV1.mp4 tem 32 s (963 quadros); quando acaba, o I1 encerra a sessão, ignora os HEARTBEATs, e a partida fica sem detecções. Correção mais simples: o A4 mandar START no lugar do HEARTBEAT (o START da equipe ativa já renova o lease). Também: os testes do P3 com INV1 e os `i1` de outras builds disputam a fila durante uma partida |
 | 27/11 | Fazer a `inf_a2` e a build da próxima melhor aplicação (o usuário está guardando a `inf_a8` no notebook) | `inf_a2`: I6 contínuo com um QR gerado pelo P3 no formato do A2 (validado com o código da VER-2), validada no notebook. Próxima aplicação: **A1** (`inf_a1`: o publicador oficial do I8 com os 4 eventos de exemplo dele, SINTÉTICOS porque o I8 não tem imagens, em laço; os eventos passaram 4/4 no validador do A1). O A3 e o A5 só consomem serviços, e o A6 e o A7 dependem do I4 e do I5, que estão fora. As duas builds foram validadas só no notebook |
@@ -81,6 +83,14 @@ cada pedido** (o mais novo em cima em cada seção).
 
 ## 3. Pendências do P3 (próximos passos)
 
+0. **`inf` sobre as builds da nuvem (27/11, tarde, commitado):** na placa:
+   `git pull`, `./ods.sh trocar inf`, `./inf.sh testar`, `validacao/inf/testar-inf-repos.sh`; remover a
+   imagem órfã `ods-i9:8ae3933…` e os volumes `ods-inf_i7-*` se faltar disco. As `inf_a1` e `inf_a2`
+   sobem pela primeira vez na placa nessa troca, e a `inf_a8` constrói o I7 `9e24056` (~1,9 GB: conferir o disco;
+   a `ods-i7-gpu:1441bbb…` sai depois de o `./inf_a8.sh testar` passar).
+0. **Recados novos (§5.1):** MOD-1 (um modelo por vez; A3/A5 sem `START`), VER-4 (P5, Silero, librosa),
+   SIS-2 (P5 sem serviço), VER-2 (socket `/tmp/VER2`), VER-3 (calibração das câmeras do A5), INV-2
+   (`pyarrow`/`mediapipe`), VER-5 (mesclar a `development` do I7, que o P3 já usa). Escrever e enviar com o usuário.
 0. **`inf_a8` de pé na placa (27/11):** comprimir e copiar para o notebook (`builds/inf_a8/guardar-no-notebook.sh`, no notebook); trazer o `./inf_a8.sh testar`.
 1. **Infs na placa: feito em 27/11** (PASSOU 8/0/2). Sobras:
    - imagens órfãs `ods-i4:503f64b…`, `ods-i4-server:503f64b…` e `ods-i4-video:p3-1` (remover à mão só se o
@@ -193,6 +203,23 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 - Também: o broker padrão da nuvem continua fixo no YAML e no código, as dependências não têm versão
   fixa (`>=`), e o pacote real do P2 (0.2.0a3 já traz Whisper) não é instalado.
 
+### 5.1 Revisão de 27/11 (tarde): falhas encontradas por componente
+
+Tabela completa, com solução sugerida: [`situacao_componentes.md`](situacao_componentes.md).
+
+| Componente | Falha | Impede subir? |
+|---|---|---|
+| I1 (MOD-1) | Um modelo por vez, e só o A4 pede o I1: o A5 (I9) e o A3 (I2→S1) ficam sem detecções VER3/VER6 contínuas. O `INV1.mp4` (32 s) encerra a sessão do A4, que depois fica sem detecções | Não; impede atender o A3 e o A5 |
+| I3 (INV-1 / VER-3) | O A5 `fe2b9a1` lê `ods.i3.calibration` por câmera, mas ninguém calibrou as câmeras dele | Não |
+| I4 (INV-2) | `d6a2185` (modelo final) sem teto no `pyarrow` (3 testes falham) nem versão do `mediapipe`; o ao vivo só recebe webcam (o `ao_vivo_local.py` não abre arquivo) | Fora da build |
+| I5 (VER-4) | `aabe73b` corrigiu a transcrição falsa (recado de 27/11 atendido), mas precisa de **P5 de pé** (o repo `p5` só tem um script de gravação) e das engines do Whisper; sem torch o VAD cai para energia (sem Silero): 2 testes falham; 2 testes pedem `librosa`, não declarado. Notebook: 30/34 | Fora da build; o P5 impede |
+| I6 (VER-2) | No modo P4 a `main` procura `/tmp/VER2` (o P4 cria `/tmp/p4_file_shm`); chave AES do A2 da nuvem não confirmada; `ods.i6.image_analysis` com ~625 mil mensagens. Suíte nova `test_i6.py`: 18/18 no notebook | Não |
+| I7 (VER-5) | `development` (`9e24056`, validador e ao vivo) não mesclada na `main`; `VER5.mp4` com placas estrangeiras | Não |
+| I8 (VER-1) | Sem modelo nem imagens: os eventos da `inf_a1` são sintéticos | Não |
+| I9 (VER-3) | `249ac83` OK (138/138 no notebook); só publica quando o I1 roda VER3/VER6 | Não |
+| P5 (SIS-2) | Sem serviço (nem memória compartilhada nem Kafka) | Sim, para o I5 |
+| P3 | `testar-inf-repos.sh` da `inf` dava R-I2 FALHOU desde 27/11 (o I2 saiu do compose da `inf`) e dizia que o I6 não tinha suíte: **corrigido** | — |
+
 ---
 
 ## 6. Resultados e evidências
@@ -222,8 +249,11 @@ Commits fixados na `inf` × ponta atual de cada repositório:
   da 6c; P5 e P7 sem serviço.
 - **MOD-1 (I1):** fim do vídeo com código 1; sem sinal de "pronto" ao P4; `ods.i1.command` sem contrato;
   erros que derrubam a fila; tratar o `timestamp` nulo do P4.
-- **VER-4 (I5):** transcrição falsa na imagem da Jetson (`4d79472`); recado escrito em 27/11.
-- **INV-2 (I4):** `pyarrow` e `mediapipe` sem versão fixa (sem mudança até 27/11).
+- **VER-4 (I5):** a transcrição falsa saiu no `aabe73b` (27/11); faltam o P5, as engines do Whisper, o
+  Silero sem torch e o `librosa` nos requirements (§5.1). O recado de 27/11 (§4.2) já não precisa ser enviado como está.
+- **INV-2 (I4):** `pyarrow` e `mediapipe` sem versão fixa (o `d6a2185`, de 27/11, trouxe o modelo final, mas não fixou as versões).
+- **MOD-1 (I1):** um modelo por vez; o A3 e o A5 ficam sem detecções contínuas (§5.1).
+- **SIS-2 (P5):** sem serviço; bloqueia o I5.
 - **TRA-2 (P6):** não entrega quadros nem grava de verdade.
 - **TRA-1 (B3):** Kafka da turma sem `restart` e sem autenticação; o da nuvem já caiu (23 e 25/11).
 - **VER-6 (S2):** S2 fora do Kafka (bloqueia A3 e A5 nos eventos).
@@ -232,6 +262,8 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 
 ## 8. Histórico deste arquivo
 
+- **27/11/2026 (noite):** regra da branch mais apta (I7 `development` na `inf_a8`); A's prontos em `situacao_componentes.md` §4; commit.
+- **27/11/2026 (tarde):** `inf` sobre as builds da nuvem; revisão sob demanda × contínuo; `situacao_componentes.md`; §5.1.
 - **27/11/2026:** build `inf_a8` (I7 contínuo para o A8).
 - **27/11/2026:** I4/I5 fora também do `inf.env`; `inf/guardar-no-notebook.sh`.
 - **27/11/2026:** `inf` validada na placa no arranjo novo (PASSOU 8/0/2).

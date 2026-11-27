@@ -1,12 +1,12 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: inf sobre a inf_a4 (sem I4 e I5)
-- Fase: validado na Jetson (27/11, Kafka da nuvem)
-- Último resultado: ./inf.sh testar PASSOU 8, FALHOU 0, AVISO 2 (T-I4/T-I5 fora) — validacao/inf/evidencias/aceite-inf-20261127-005013.txt
-- Próximo passo: commit da evidência + journal/CLAUDE.md (aguarda usuário); fechar o teste do P4 (.txt, --desfazer)
-- Bloqueios / perguntas abertas ao usuário: enviar recados SIS-2 e VER-4; recado MOD-1 adiado; A2 sem commit; volume do ods.i6.image_analysis na nuvem; stash/arquivos soltos na placa
-- Continuidade: journal.md (raiz) = retrato do projeto, atualizar a cada pedido; este arquivo e o CLAUDE.md versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
+- Aplicação em foco: inf sobre as builds da nuvem (inf_a4, inf_a1, inf_a2, inf_a8); I4 e I5 fora
+- Fase: script commitado (27/11 noite); não rodado na placa
+- Último resultado: regra da branch mais apta aplicada (só o I7 mudou: development 9e24056 na inf_a8; compila e o evento passa no validar_i7.py, notebook); situacao_componentes.md §4 com os A's prontos (A8, A4 validadas; A2, A1 em teoria; A5, A3, A6, A7 não)
+- Próximo passo: na placa: git pull, ./ods.sh trocar inf (constrói I9 249ac83 e I7 9e24056, ~1,9 GB: df -h / antes), ./inf.sh testar, ./inf_a8.sh testar, testar-inf-repos.sh
+- Bloqueios / perguntas abertas ao usuário: recados novos (MOD-1, VER-4, SIS-2/P5, VER-2, VER-3, INV-2, VER-5); builds/a2 com alterações antigas sem commit (deixadas fora do commit); chave AES do A2 da nuvem
+- Continuidade: journal.md (raiz) = retrato do projeto, atualizar a cada pedido; situacao_componentes.md (raiz) = estado por componente da inf.
 
 ## Registro
 
@@ -474,3 +474,23 @@
 ### 2026-11-27 — subir-do-notebook confere a build da pasta
 - O usuário passou a pasta inf_a4-20261126-2152 ao script da inf_a8; ele recusou só pelo I7_REF vazio.
 - inf_a1/a2/a4/a8 subir-do-notebook.sh: leem o '# Build <app> guardada' do manifesto e recusam pasta de outra build, indicando o script certo. Testado com pastas falsas. Sem commit.
+
+### 2026-11-27 — pedido: atualizar a inf com as correções das equipes; rever sob demanda × contínuo; situacao_componentes.md
+- Pedido: grupos anunciaram correções; atualizar a inf; rever se I3/I7/I8 devem ficar sob demanda (como o I7 do A8, que precisava ser contínuo); garantir que as infs atendam aos A's da nuvem; ver se algum I depende de P ou B na placa (P4 já roda); falhas no journal; gerar situacao_componentes.md (tabela por componente: sobe?, testes, passam?, pendências e solução).
+- ls-remote 27/11: mudaram I4 503f64b→d6a2185 (27/11), I5 →aabe73b (27/11: P2 0.2.0a3 real, sem fallback falso, SHM do P5), I9 8ae3933→249ac83 (27/11: Dockerfile próprio, lotes), P4 →2b136d1 (27/11: laço contínuo de MP4), A5 c634433→fe2b9a1 (27/11: Kafka da nuvem, I3/P6 reais). Iguais: I1 develop 3b2a9cc, I2 5f4957c, I3 0a7f944, I6 main 89143c9 (develop é mais velha), I7 main 1441bbb (development 9e24056 com ao vivo, não mesclada), I8 main 051851f, P2 0.2.0a3.
+- Clones em scratchpad/repos (sessão 4c377f70).
+- Respostas do usuário: (1) a inf passa a rodar SOBRE as inf_aX (trocar inf sobe inf_a4, inf_a1, inf_a2, inf_a8; a inf perde I6/I7/I8 próprios; fica I9 contínuo + I3 sob demanda; testar confere todos os tópicos). (2) I4 e I5: atualizar commits (comentados) e manter fora.
+- Achados até aqui: I9 249ac83 tem Dockerfile próprio (python 3.12-slim, USER nobody) e 138/138 testes OK no notebook; I5 aabe73b 30/34 no notebook (2 VAD falham sem torch = imagem da Jetson cai no VAD por energia, sem Silero; 2 pedem librosa não declarado); I5 precisa P5 (repo p5 só script de gravação) e engines Whisper do P2; I6 main volta "video": "/tmp/VER2" (P4 usa /tmp/p4_file_shm); A5 fe2b9a1 e A3 dependem de I1 VER3/VER6 contínuo e ninguém manda START (orquestrador 1 modelo por vez).
+- Feito (27/11 tarde): inf.env (I9 249ac83; I2/I6/I7/I8/A1 fora; I4 d6a2185 e I5 aabe73b comentados; INF_ESPERA_NUVEM_S=420), docker-compose.yml (só kafka-topicos, i3, i9 com o Dockerfile da equipe), inf.sh (checar_nuvem, espera conjunta só dos contínuos rodando, T-I6/I7/I8 pelos tópicos, T-I7 -fp16 pelo log do i7 da inf_a8; i6/i7/i8 → erro apontando a build), guardar-no-notebook.sh (só I3, I9; --com-engine saiu), limpar.sh (comentários), ods.sh (base_de inf = inf_a4 inf_a1 inf_a2 inf_a8; sobe todas), validacao/inf/testar-inf-repos.sh (na inf, imagens e REFs das builds da nuvem; corrige R-I2, que falhava desde 27/11 por i2 fora do compose), GUIA-BUILD-INF.md, builds/README.md.
+- Validado só no notebook: bash -n; YAML; docker falso (scratchpad/sim): testar tudo de pé 8/0/2; sem inf_a8 7/1/2 sem esperar; sem as 3 5/3/2; I7 fp32 → T-I7 FALHOU; status; i7/i8 → erro; ods.sh trocar inf sobe inf_a4, a1, a2, a8, inf. Sem docker compose nem shellcheck aqui.
+- Próximo: situacao_componentes.md, journal, CLAUDE.md §5/§8.
+- Escritos: situacao_componentes.md (raiz), journal §1/§2/§3/§5.1/§7/§8, CLAUDE.md §5 (inf) e §8 (MOD-1, VER-3, INV-2, VER-4, SIS-2, VER-2, VER-5); R-I6 no testar-inf-repos.sh (test_i6.py 18/18 no notebook). Sem commit.
+
+### 2026-11-27 (noite) — regra da branch mais apta; A's prontos; commit
+- Pedido: se o código mais apto estiver noutra branch que não a main, a build usa ela; commit; listar os A's prontos em teoria.
+- Conferido (git rev-list contra todas as branches remotas, clones em scratchpad/repos): I1 develop 3b2a9cc (main só merges antigos); I2/I3/I4/I5/I9 só main; I6 develop 6 atrás da main; I8 develop/Feature (3-4/11) divergentes e mais antigas; I7 development 9e24056 contém a main 1441bbb (o commit da main fora dela é só o merge, árvore = 4b0b6b4) e traz validação de contrato antes de publicar, SALVAR_MOSAICOS, ao vivo http/rtsp.
+- Feito: inf_a8.env I7_REF=9e24056… (com como voltar), compose SALVAR_MOSAICOS=publicados, docstring do i7_continuo.py, guia inf_a8, situacao_componentes.md (branch usada, linha do I7, §3, §4 A's prontos), journal, CLAUDE.md §2/§5/§8.
+- Validado no notebook: py_compile dos scripts do I7 9e24056; evento do ConstrutorEventos dele passa no contrato/validar_i7.py (CONTRATO 1 1). Não construído na placa.
+- A's (código de 27/11): A8 develop consome i7.plate_read; A4 main c280dea pede i1.command e lê i3/s1; A2 main lê i6.code_read, chave padrão "a"*32 via A2_AES_KEY; A1 lê defeito_classificado; A5 lê s2/s3 + i3.calibration; A3 dev lê s1/s2/s3; A6 lê i4.*; A7 cdaf316 lê i5.transcript.
+- Commit: só os arquivos do P3 desta frente; builds/a2 e validacao/a2 (alterações antigas) ficaram de fora.
+

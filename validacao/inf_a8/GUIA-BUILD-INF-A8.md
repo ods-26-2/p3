@@ -35,7 +35,7 @@ Para a cadeia da 6c (I1 → I2 → S1 → S5), use o `./inf_a8.sh i1`. O S1 e o 
 
 ## 3. Como o I7 fica contínuo
 
-O I7 `1441bbb` não tem modo laço: com `--video`, ele termina no fim do arquivo. Tudo é feito pelo P3, sem
+O I7 (`development` `9e24056` desde 27/11/2026; antes `main` `1441bbb`) não tem modo laço: com `--video`, ele termina no fim do arquivo. Tudo é feito pelo P3, sem
 alterar o código do I7.
 
 - **Laço:** o comando do serviço toca o vídeo, espera `I7_PAUSA_S` (30 s) e toca de novo. Se o I7 sair com
@@ -51,8 +51,10 @@ alterar o código do I7.
 - **Disco:** as saídas (CSV e mosaicos) ficam em `/saidas/<vídeo>` e cada volta sobrescreve a anterior,
   então não crescem.
 - **Imagem e engine:**
-  - a imagem é a mesma da build `inf` (`ods-i7-gpu:1441bbb…`, mesma receita): se já existe na placa,
-    nada é construído;
+  - a imagem é `ods-i7-gpu:<I7_REF>`, com a receita do compose. Com o `9e24056`, a placa constrói uma
+    imagem nova (~1,9 GB; confira o disco). A `inf` não tem mais I7 próprio. Voltar à `main`:
+    `I7_REF=1441bbb…` no `inf_a8.local.env`;
+  - a `development` grava só o mosaico dos quadros com leitura publicada (`SALVAR_MOSAICOS=publicados`);
   - a engine é a `app-plates-1.0.0` do I1, que a `inf_a4` compila em `/var/lib/ods/engines`.
 - **Vídeo:** é o `/var/lib/ods/videos/cam0.mp4`, a pasta de vídeos do P3, montado só para leitura e
   sem criar a pasta. **Não use o `VER5.mp4` da SIS-2 no I7.** No 1º teste na placa (27/11) o I7

@@ -48,11 +48,11 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 
 | Build | Sobe por padrão | Sob demanda | Portas | Guia |
 |---|---|---|---|---|
-| `inf/` | `i6` (QR, vídeo em laço), `i9` — sobre a `inf_a4` (I1 e I2 dela, desde 27/11); I4 e I5 fora | `./inf.sh i1 [EQUIPE]` (pedido ao I1 da `inf_a4`) · `i3` (calibração da quadra do A4) · `i7` (placas em vídeo, detector na GPU) · `i8` (eventos de exemplo) · `./inf.sh testar` dispara todas e confere cada tópico | — | [`validacao/inf/GUIA-BUILD-INF.md`](../validacao/inf/GUIA-BUILD-INF.md) |
+| `inf/` | `i9` — **sobre as builds da nuvem** (desde 27/11): I1/I2 da `inf_a4`, I8 da `inf_a1`, I6 da `inf_a2`, I7 da `inf_a8`; I4 e I5 fora | `./inf.sh i1 [EQUIPE]` (pedido ao I1 da `inf_a4`) · `i3` (calibração da quadra de teste) · `./inf.sh testar` dispara I1 e I3, espera os contínuos e confere cada tópico | — | [`validacao/inf/GUIA-BUILD-INF.md`](../validacao/inf/GUIA-BUILD-INF.md) |
 
-Sem `i1` nem `i2` próprios: são os da `inf_a4` (tem de estar de pé e no mesmo Kafka; o `inf.sh` confere).
-`./ods.sh trocar inf` sobe a `inf_a4` antes. GPU: o I1 e o detector do I7 (mesma engine `app-plates` do I1); o resto em CPU.
-Guardar as imagens no notebook (roda NO NOTEBOOK, por ssh): `inf/guardar-no-notebook.sh` (guia, seção 7).
+Sem I1, I2, I6, I7 nem I8 próprios: são os das builds da nuvem (de pé e no mesmo Kafka; o `inf.sh` confere).
+`./ods.sh trocar inf` sobe `inf_a4`, `inf_a1`, `inf_a2` e `inf_a8` antes. Estado de cada componente: [`situacao_componentes.md`](../situacao_componentes.md).
+Guardar as imagens no notebook (roda NO NOTEBOOK, por ssh): `inf/guardar-no-notebook.sh` (só I3 e I9; guia, seção 7).
 
 ## Build inf_a4: só I1, I2 e I3 (camada 1-2 do A4)
 
@@ -73,7 +73,7 @@ notebook, por ssh): `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]
 | `inf_a1/` | `i8` **contínuo**: o publicador oficial do I8 reenvia os 4 eventos de exemplo dele (SINTÉTICOS) a cada 60 s | `./inf_a1.sh i1 [QUADROS]` (VER1, peças, pelo I1 da `inf_a4`) | `./inf_a1.sh testar` (eventos novos, as 4 classificações e contrato pelo validador do próprio A1) | [`validacao/inf_a1/GUIA-BUILD-INF-A1.md`](../validacao/inf_a1/GUIA-BUILD-INF-A1.md) |
 
 Kafka **da nuvem**, onde o A1 (VER-1) consome `ods.industria.defeito_classificado` 2.0. O I8 não tem imagens
-para inferir: os eventos são os de exemplo do próprio I8 (`artifact_version` `p3-exemplos-i8`). Mesma imagem do I8 da `inf/`.
+para inferir: os eventos são os de exemplo do próprio I8 (`artifact_version` `p3-exemplos-i8`). Mesma imagem do I8 que a `inf/` usava (desde 27/11 a `inf` usa esta build).
 
 ## Build inf_a2: I6 contínuo para o A2 da nuvem
 
@@ -82,7 +82,7 @@ para inferir: os eventos são os de exemplo do próprio I8 (`artifact_version` `
 | `inf_a2/` | `i6` **contínuo** (CPU), vídeo de QR do P3 em laço, no ritmo do vídeo, `source_id` `cam0` (catraca-01) | `./inf_a2.sh qr` (gera de novo o código e o vídeo) | `./inf_a2.sh testar` (leituras novas, código aceito pelas regras do A2, atraso ≤ 2 s e contrato com o validador do I6) | [`validacao/inf_a2/GUIA-BUILD-INF-A2.md`](../validacao/inf_a2/GUIA-BUILD-INF-A2.md) |
 
 Kafka **da nuvem**, onde o A2 (VER-2) consome `ods.i6.code_read`. O QR é gerado pelo P3 no formato do A2
-(AES-256 com CPF de teste e validade; chave no `inf_a2.secrets.env`, fora do Git). Mesma imagem do I6 da `inf/`.
+(AES-256 com CPF de teste e validade; chave no `inf_a2.secrets.env`, fora do Git). Mesma imagem do I6 que a `inf/` usava (desde 27/11 a `inf` usa esta build).
 
 ## Build inf_a8: I7 contínuo para o A8 da nuvem
 
@@ -90,7 +90,7 @@ Kafka **da nuvem**, onde o A2 (VER-2) consome `ods.i6.code_read`. O QR é gerado
 |---|---|---|---|---|
 | `inf_a8/` | `i7` **contínuo** (GPU), `cam0.mp4` (VER-5) em laço, no ritmo do vídeo, `source_id` `cam-entrada` | `./inf_a8.sh i1 [QUADROS]` (VER5, pelo I1 da `inf_a4`) | `./inf_a8.sh testar` (leituras novas, GPU, `captured_at` recente e contrato com o validador do I7) | [`validacao/inf_a8/GUIA-BUILD-INF-A8.md`](../validacao/inf_a8/GUIA-BUILD-INF-A8.md) |
 
-Kafka **da nuvem**, onde o A8 (VER-5) consome `ods.i7.plate_read`. Mesma imagem do I7 da `inf/`
+Kafka **da nuvem**, onde o A8 (VER-5) consome `ods.i7.plate_read`. Mesma imagem do I7 que a `inf/` usava (desde 27/11 a `inf` usa esta build)
 (`ods-i7-gpu:<I7_REF>`) e a engine `app-plates` da `inf_a4`. Convive com a `inf_a4` no `./ods.sh trocar`.
 Guardar no notebook e subir de lá: `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]` (guia, seção 5).
 

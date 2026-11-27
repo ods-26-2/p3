@@ -10,12 +10,14 @@
 # rede só para instalar o pytest.
 #
 # Itens:
+#   (na inf, desde 27/11/2026, I1/I2, I6, I7 e I8 são lidos das builds inf_a4, inf_a2, inf_a8 e
+#   inf_a1, sobre as quais ela roda)
 #   R-I1  suíte do I1 no serviço i1: validacao/i1/testar-i1-servico.sh (GPU); na inf, o da build
 #         da inf_a4 (desde 27/11/2026 a inf usa o I1 dela; antes, o da build dedicada builds/i1)
 #   R-I2  I2/tests (unittest) do clone por volume na imagem ods-i2 (o .dockerignore do I2 tira os testes)
 #   R-I3  I3/tests (unittest) e dados/ do clone por volume na imagem ods-i3 (idem)
 #   R-I4  tests/ (pytest) do clone por volume na imagem ods-i4; pytest instalado na hora
-#   R-I6  o repositório não tem suíte (AVISO)
+#   R-I6  DetectorQR/test_i6.py (unittest, desde 25/11/2026) do clone por volume na imagem ods-i6
 #   R-I7  o repositório não tem suíte (AVISO)
 #   R-I8  comando padrão da imagem ods-i8-publisher, que é a suíte de contrato e do publicador
 #   R-I9  I9/tests (unittest) do clone por volume na imagem ods-i9
@@ -126,6 +128,31 @@ import json, sys
 for nome, s in sorted(json.load(open(sys.argv[1]))["services"].items()):
     print(f"{nome} {s.get('image', '?')}")
 PY
+# A inf roda sobre as builds da nuvem (27/11/2026): I1/I2 da inf_a4, I8 da inf_a1, I6 da inf_a2 e
+# I7 da inf_a8. Os serviços que faltam na inf vêm do compose delas, com os commits do .env delas.
+if [[ "$NOME" == inf ]]; then
+  for b in inf_a4 inf_a1 inf_a2 inf_a8; do
+    [[ -f "$P3/builds/$b/$b.env" ]] || continue
+    ENVS_B=(--env-file "$P3/builds/$b/$b.env")
+    [[ -f "$P3/builds/$b/$b.local.env" ]] && ENVS_B+=(--env-file "$P3/builds/$b/$b.local.env")
+    PERFIS_B=()
+    while read -r p; do [[ -n "$p" ]] && PERFIS_B+=(--profile "$p"); done \
+      < <(docker compose --project-directory "$P3/builds/$b" -f "$P3/builds/$b/docker-compose.yml" "${ENVS_B[@]}" config --profiles)
+    docker compose --project-directory "$P3/builds/$b" -f "$P3/builds/$b/docker-compose.yml" "${ENVS_B[@]}" \
+      "${PERFIS_B[@]}" config --format json > "$SAIDA/compose-$b.json" || erro "docker compose config falhou em builds/$b"
+    python3 - "$SAIDA/compose-$b.json" "$SAIDA/imagens.txt" <<'PY2' >> "$SAIDA/imagens.txt"
+import json, sys
+ja = {l.split()[0] for l in open(sys.argv[2]) if l.strip()}
+for nome, s in sorted(json.load(open(sys.argv[1]))["services"].items()):
+    if nome not in ja:
+        print(f"{nome} {s.get('image', '?')}")
+PY2
+    # Commits (<REPO>_REF) da build da nuvem para os repositórios que a inf não fixa
+    while IFS='=' read -r var val; do
+      [[ -z "${!var:-}" ]] && export "$var=$val"
+    done < <(grep -E '^[A-Z0-9]+_REF=' "$P3/builds/$b/$b.env")
+  done
+fi
 imagem() { awk -v s="$1" '$1 == s { print $2 }' "$SAIDA/imagens.txt"; }
 sed 's/^/  /' "$SAIDA/imagens.txt"
 
@@ -238,8 +265,22 @@ if quer i4; then
   fi
 fi
 
-# ---- I6 e I7: sem suíte no repositório -----------------------------------------------------------
-quer i6 && item R-I6 AVISO "o repositório do I6 (DetectorQR) não tem suíte de testes"
+# ---- I6: DetectorQR/test_i6.py do clone (a imagem só leva o leitor.py) --------------------------
+if quer i6; then
+  etapa "R-I6 DetectorQR/test_i6.py (unittest) na imagem do serviço i6"
+  img=$(imagem i6)
+  if tem_imagem R-I6 "$img" && clone_no_commit R-I6 i6; then
+    if [[ -f "$SRC_DIR/i6/DetectorQR/test_i6.py" ]]; then
+      rodar_suite R-I6 "test_i6.py na $img" "$SAIDA/i6.txt" -- --network none \
+        -v "$SRC_DIR/i6/DetectorQR/test_i6.py:/app/test_i6.py:ro" -w /app \
+        --entrypoint python "$img" -m unittest -v test_i6
+    else
+      item R-I6 FALHOU "sem $SRC_DIR/i6/DetectorQR/test_i6.py (rode o preparar-codigo.sh da build do I6)"
+    fi
+  fi
+fi
+
+# ---- I7: sem suíte no repositório ------------------------------------------------------------------
 quer i7 && item R-I7 AVISO "o repositório do I7 não tem suíte de testes (só scripts/consumidor_teste.py, manual)"
 
 # ---- I8: o comando padrão da imagem do publicador é a suíte ---------------------------------------
