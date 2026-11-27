@@ -464,3 +464,13 @@
 - Arquivos (builds/inf_a1/): inf_a1.env (I8 051851f e A1 5d17305, o mesmo clone da inf; idêntico ao HEAD 5e0f07e nos arquivos usados), docker-compose.yml (laço sh), inf_a1.sh (testar, i1 VER1 com source /videos-p3, status), contrato/validar_a1.py (o contracts.py do A1 carregado pelo caminho), limpar.sh, preparar-codigo.sh, guardar/subir-do-notebook.
 - Outros arquivos: ods.sh com NUVEM=(inf_a1 inf_a2 inf_a4 inf_a8); guia; README; CLAUDE.md; journal.
 - Validação (só no notebook): os mocks preparados passaram 4/4 no validate_piece_analysis do A1 (jsonschema no venv); inf_a1.sh contra docker falso: subir, testar 3/0/0, parado 1/2/0, i1, status.
+
+### 2026-11-27 — inf_a4 frente ao A4 (análise)
+- A4 c280dea, back/kafka_bridge.py: comandar_i1 manda envelope CMD 6c {action, squad: INV1}, START na abertura, HEARTBEAT a cada 20 s quando ao_vivo, STOP no fim. O orquestrador 3b2a9cc (parse_control_command) aceita o envelope. Sem source: o I1 lê /home/sys2/SIS-2/videos/INV1.mp4 com source_id INV1. O A4 cronometra pelo frame_index (RELOGIO_QUADRO), então não precisa de ritmo.
+- Falha: INV1.mp4 tem 32,1 s (963 quadros, 29,97 q/s; cópia em assets/). No fim, a sessão acaba; o HEARTBEAT para equipe não ativa é ignorado (orchestrator.py:511). A partida fica sem detecções depois de ~40 s.
+- Correção: o A4 mandar START a cada 20 s (orchestrator.py:518: START repetido da equipe ativa renova o lease; com a sessão encerrada, cria um job novo e o vídeo recomeça). Alternativa: o I1 ter laço. Contorno possível no P3: um vigia na inf_a4 que reenvia o START (não feito; aguarda o usuário).
+- Conflitos: o ./inf_a4.sh testar (INV1) durante uma partida renova o lease do A4 em vez de abrir sessão própria; os ./inf_a8.sh i1 e ./inf_a1.sh i1 entram na fila FIFO na frente do A4.
+
+### 2026-11-27 — subir-do-notebook confere a build da pasta
+- O usuário passou a pasta inf_a4-20261126-2152 ao script da inf_a8; ele recusou só pelo I7_REF vazio.
+- inf_a1/a2/a4/a8 subir-do-notebook.sh: leem o '# Build <app> guardada' do manifesto e recusam pasta de outra build, indicando o script certo. Testado com pastas falsas. Sem commit.

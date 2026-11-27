@@ -49,6 +49,10 @@ if [[ -z "$PASTA" ]]; then
 fi
 PASTA=$(readlink -f "$PASTA")
 [[ -f "$PASTA/manifesto.txt" && -f "$PASTA/imagens.tar.zst" ]] || erro "$PASTA não é uma pasta do guardar-no-notebook.sh"
+# A pasta tem de ser DESTA build (cada build tem o seu guardar/subir): o manifesto diz qual é
+BUILD_PASTA=$(sed -n 's/^# Build \([^ ]*\) guardada.*/\1/p' "$PASTA/manifesto.txt" | head -1)
+[[ "$BUILD_PASTA" == inf_a1 ]] || erro "a pasta $PASTA é da build '${BUILD_PASTA:-?}', não da inf_a1.
+  Use o script da build dela: ../${BUILD_PASTA:-<build>}/subir-do-notebook.sh $PASTA"
 
 etapa "Conferindo a pasta $PASTA"
 (cd "$PASTA" && sha256sum -c --quiet SHA256SUMS) || erro "a pasta está corrompida (SHA256SUMS não confere)"
