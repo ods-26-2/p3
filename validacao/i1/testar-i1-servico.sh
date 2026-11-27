@@ -16,7 +16,7 @@
 #
 #   ./testar-i1-servico.sh              serviço i1 da build dedicada (builds/i1, orquestrador)
 #   ./testar-i1-servico.sh --build a8   serviço i1 da build do A8 (perfil video)
-#   ./testar-i1-servico.sh --build inf_restrita   serviço i1 da build inf_restrita (I1 próprio, Kafka da placa)
+#   ./testar-i1-servico.sh --build inf_a4   serviço i1 da build inf_a4 (I1 próprio, Kafka da placa)
 # Resultado: validacao/i1/resultados/i1-servico-<data>.txt (+ pasta com as saídas completas).
 set -euo pipefail
 [[ -n "${LC_ALL:-}" ]] && export LC_ALL=C.UTF-8
@@ -27,11 +27,11 @@ P3="$(readlink -f "$AQUI/../..")"
 NOME_BUILD=i1
 case "${1:-}" in
   -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  --build) NOME_BUILD=${2:?--build precisa de i1, a8 ou inf_restrita} ;;
+  --build) NOME_BUILD=${2:?--build precisa de i1, a8 ou inf_a4} ;;
   "") ;;
-  *) echo "opção desconhecida: $1 (use --build i1|a8|inf_restrita)" >&2; exit 1 ;;
+  *) echo "opção desconhecida: $1 (use --build i1|a8|inf_a4)" >&2; exit 1 ;;
 esac
-[[ "$NOME_BUILD" =~ ^(i1|a8|inf_restrita)$ ]] || { echo "--build aceita i1, a8 ou inf_restrita" >&2; exit 1; }
+[[ "$NOME_BUILD" =~ ^(i1|a8|inf_a4)$ ]] || { echo "--build aceita i1, a8 ou inf_a4" >&2; exit 1; }
 BUILD="$P3/builds/$NOME_BUILD"
 
 if [[ -t 1 ]]; then V=$'\e[32m'; A=$'\e[33m'; R=$'\e[31m'; NC=$'\e[0m'; else V=; A=; R=; NC=; fi

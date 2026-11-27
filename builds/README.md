@@ -53,15 +53,17 @@ Antes da primeira subida: `cp <app>.secrets.env.exemplo <app>.secrets.env` e pre
 Sem `i1` próprio: o I1 é o de `i1/` (tem de estar de pé e no mesmo Kafka; o `inf.sh` confere). Entra no
 `./ods.sh trocar inf` como as aplicações. GPU: o I1 e o detector do I7 (mesma engine `app-plates` do I1); o resto em CPU.
 
-## Build restrita: só I1, I2 e I3
+## Build inf_a4: só I1, I2 e I3 (camada 1-2 do A4)
 
 | Build | Sobe por padrão | Sob demanda | Testes | Guia |
 |---|---|---|---|---|
-| `inf_restrita/` | `i1` (orquestrador **próprio**, GPU) + `i2` | `./inf_restrita.sh i1 [EQUIPE] [QUADROS]` · `i3` (calibração da quadra do A4) | `./inf_restrita.sh testar` (cadeia I1 → I2, I3 e contrato com o schema de cada repositório) · `./inf_restrita.sh repos` (suítes das equipes nas imagens) | [`validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md`](../validacao/inf_restrita/GUIA-BUILD-INF-RESTRITA.md) |
+| `inf_a4/` | `i1` (orquestrador **próprio**, GPU) + `i2` | `./inf_a4.sh i1 [EQUIPE] [QUADROS]` · `i3` (calibração da quadra do A4) | `./inf_a4.sh testar` (cadeia I1 → I2, I3 e contrato com o schema de cada repositório) · `./inf_a4.sh repos` (suítes das equipes nas imagens) | [`validacao/inf_a4/GUIA-BUILD-INF-A4.md`](../validacao/inf_a4/GUIA-BUILD-INF-A4.md) |
 
 Kafka **da nuvem** (`34.66.235.91:9093`); o container `kafka` da placa tem de continuar rodando (a build confere e avisa).
-Broker da placa só por `inf_restrita.local.env`. A imagem do I1 é a mesma do `i1/` (`ods-i1-gpu:<I1_REF>`): não
+Broker da placa só por `inf_a4.local.env`. A imagem do I1 é a mesma do `i1/` (`ods-i1-gpu:<I1_REF>`): não
 reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
+Chamava-se `inf_restrita` até 26/11/2026. Guardar no notebook e subir de lá sem reconstruir (rodam no
+notebook, por ssh): `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]` (guia, seção 4.1).
 
 ## Estrutura comum
 

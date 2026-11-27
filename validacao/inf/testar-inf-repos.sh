@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # testar-inf-repos.sh — as suítes de teste dos repositórios das equipes, dentro das imagens da
-# build "inf" (padrão) ou "inf_restrita" (só I1, I2, I3) (P3 / SIS-1).
+# build "inf" (padrão) ou "inf_a4" (só I1, I2, I3) (P3 / SIS-1).
 #
 # Usa exatamente a imagem que cada serviço da builds/<build>/docker-compose.yml usa (lida do
 # "docker compose config"), no commit fixado do <build>.env. Não altera imagem nem código das
@@ -11,7 +11,7 @@
 #
 # Itens:
 #   R-I1  suíte do I1 no serviço i1: validacao/i1/testar-i1-servico.sh (GPU); na inf, o da build
-#         dedicada builds/i1; na inf_restrita, o i1 próprio dela
+#         dedicada builds/i1; na inf_a4, o i1 próprio dela
 #   R-I2  I2/tests (unittest) do clone por volume na imagem ods-i2 (o .dockerignore do I2 tira os testes)
 #   R-I3  I3/tests (unittest) e dados/ do clone por volume na imagem ods-i3 (idem)
 #   R-I4  tests/ (pytest) do clone por volume na imagem ods-i4; pytest instalado na hora
@@ -24,8 +24,8 @@
 #   ./testar-inf-repos.sh                 todos
 #   ./testar-inf-repos.sh --sem-i1        sem o I1 (que usa a GPU e a build builds/i1)
 #   ./testar-inf-repos.sh i2 i9           só os citados (i1 i2 i3 i4 i6 i7 i8 i9)
-#   ./testar-inf-repos.sh --build inf_restrita [i1 i2 i3]   imagens da build inf_restrita
-#                                         (= builds/inf_restrita/inf_restrita.sh repos)
+#   ./testar-inf-repos.sh --build inf_a4 [i1 i2 i3]   imagens da build inf_a4
+#                                         (= builds/inf_a4/inf_a4.sh repos)
 # O que vem do clone tem de estar no commit do <build>.env (os clones de SRC_DIR são de todas as
 # builds): fora dele, o item FALHA e pede builds/<build>/preparar-codigo.sh.
 # Resultado: validacao/<build>/resultados/<build>-repos-<data>.txt (+ pasta com a saída de cada suíte).
@@ -47,22 +47,22 @@ ALVOS=()
 while (( $# )); do
   case "$1" in
     -h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    --build)   shift; NOME=${1:?--build precisa de inf ou inf_restrita} ;;
+    --build)   shift; NOME=${1:?--build precisa de inf ou inf_a4} ;;
     --sem-i1)  SEM_I1=1 ;;
     i1|i2|i3|i4|i6|i7|i8|i9) ALVOS+=("$1") ;;
-    i5) erro "o I5 está fora das builds inf e inf_restrita (24/11/2026)" ;;
+    i5) erro "o I5 está fora das builds inf e inf_a4 (24/11/2026)" ;;
     *) erro "opção desconhecida: $1 (veja --help)" ;;
   esac
   shift
 done
 case "$NOME" in
   inf) ;;
-  inf_restrita)
+  inf_a4)
     TODOS=(i1 i2 i3)
     for a in "${ALVOS[@]}"; do
-      [[ " ${TODOS[*]} " == *" $a "* ]] || erro "a build inf_restrita só tem i1, i2 e i3 (pedido: $a)"
+      [[ " ${TODOS[*]} " == *" $a "* ]] || erro "a build inf_a4 só tem i1, i2 e i3 (pedido: $a)"
     done ;;
-  *) erro "--build aceita inf ou inf_restrita (recebi '$NOME')" ;;
+  *) erro "--build aceita inf ou inf_a4 (recebi '$NOME')" ;;
 esac
 BUILD="$P3/builds/$NOME"
 (( ${#ALVOS[@]} )) || ALVOS=("${TODOS[@]}")
@@ -186,8 +186,8 @@ rodar_suite() {   # rodar_suite <item> <descrição> <arquivo de saída> -- <doc
 
 # ---- I1 ----------------------------------------------------------------------------------------
 if quer i1; then
-  # Na inf, o I1 é o da build dedicada (builds/i1); na inf_restrita, o i1 próprio dela
-  build_i1=i1; [[ "$NOME" == inf_restrita ]] && build_i1=inf_restrita
+  # Na inf, o I1 é o da build dedicada (builds/i1); na inf_a4, o i1 próprio dela
+  build_i1=i1; [[ "$NOME" == inf_a4 ]] && build_i1=inf_a4
   etapa "R-I1 Suíte do I1 no serviço i1 da build $build_i1 (validacao/i1/testar-i1-servico.sh)"
   cod=0
   "$P3/validacao/i1/testar-i1-servico.sh" --build "$build_i1" > "$SAIDA/i1.txt" 2>&1 || cod=$?

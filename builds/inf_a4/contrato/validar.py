@@ -1,7 +1,7 @@
 """validar.py — confere mensagens do Kafka contra o schema do repositório que as produziu (P3).
 
 Roda DENTRO da imagem do produtor (ods-i1-gpu, ods-i2, ods-i3), que já traz o jsonschema e a
-pasta schemas/ do próprio repositório. Uso (o inf_restrita.sh monta os arquivos):
+pasta schemas/ do próprio repositório. Uso (o inf_a4.sh monta os arquivos):
 
     python validar.py <schema.json> <mensagens.jsonl> [source_id]
 

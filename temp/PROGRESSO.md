@@ -1,11 +1,11 @@
 # Progresso — builds ODS (P3)
 
 ## Estado atual
-- Aplicação em foco: build "inf_restrita" (só I1, I2, I3; I1 próprio)
-- Fase: Jetson PASSOU 10/0/0 com o Kafka da placa (25/11); trocada para o Kafka da NUVEM (validado só fora da placa)
-- Último resultado: usuário esclareceu: "manter kafka local" = container kafka da placa sempre rodando, não usar o broker. Build: KAFKA_BROKER nuvem, KAFKA_CONTAINER vazio, KAFKA_LOCAL_CONTAINER=kafka conferido (aviso se parado); local.env.exemplo com a placa. Simulação: feliz 10/0; kafka local parado → aviso; I1 permanente na nuvem → recusa; na placa → aviso.
-- Próximo passo: commit (aguarda usuário); na placa: git pull; ../i1/i1.sh parar (se na nuvem); ./inf_restrita.sh parar && ./inf_restrita.sh && ./inf_restrita.sh testar; evidência do teste 161228 para validacao/inf_restrita/evidencias/
-- Bloqueios / perguntas abertas ao usuário: disco da placa 3,7 GB livres (< 4 GB); I1 permanente e o desta build não podem ficar juntos na nuvem
+- Aplicação em foco: build "inf_a4" (era inf_restrita até 26/11): só I1, I2, I3 = camada 1-2 do A4 (A4, S1 e I3 de registro na nuvem)
+- Fase: renomeada + I3 0a7f944 + scripts guardar/subir pelo notebook; validado só no notebook (bash -n, YAML, simulação com ssh/docker falsos); commit feito (sem push)
+- Último resultado: simulação dos scripts: guardar ok, subir ok, 2ª subida sem carga, 5 casos de falha param com mensagem
+- Próximo passo: na placa: ./inf_restrita.sh parar (ANTES do pull) → git pull → mover resultados/ → docker tag do I3 → ./inf_a4.sh → testar; depois guardar-no-notebook.sh e, para recuperar, subir-do-notebook.sh
+- Bloqueios / perguntas abertas ao usuário: push do p3 (não feito); disco da placa ~4 GB; volume antigo ods-inf_restrita_i3-registro fica órfão (remoção só se o usuário pedir); A2 segue sem commit
 - Continuidade: este arquivo e o CLAUDE.md foram versionados a pedido do usuário (13/11/2026); temp/ segue no .gitignore (PROGRESSO.md entrou com git add -f).
 
 ## Registro
@@ -548,3 +548,69 @@
 - Placa (usuário): a pasta existe (dono sys2; INV1 76 MB, INV2, VER2, VER2_2, VER5 19 MB). Antes o I1 lia INV1.mp4 de assets/ do p3 (VIDEO_DIR montado em /videos + I1_VIDEOS_DIR).
 - Feito: compose monta I1_VIDEOS_ORIGINAL no MESMO caminho, só leitura, create_host_path false; tirado I1_VIDEOS_DIR (vale o padrão do código); vídeos do P3 em /videos-p3. inf_restrita.sh: listar_originais via docker --mount (ods pode não ler /home/sys2), aviso se faltar a equipe do teste; status lista as duas pastas. Guia e CLAUDE.md.
 - Validado fora da placa: shellcheck, compose config, simulação subir/status. Falta na placa: parar && subir && testar.
+- Commit pedido pelo usuário: e1476e2 (pasta original dos vídeos). Sem push.
+
+### 2026-11-25 20:04 — Jetson: I1 lendo a pasta original confirmado
+- Log de partida: videos_dir='/home/sys2/SIS-2/videos', broker nuvem. Sem I1_VIDEOS_DIR. Montagens: /home/sys2/SIS-2/videos (rw=false), /var/lib/ods/videos -> /videos-p3 (rw=false).
+- START INV1 (source_id conferencia-video): fd 51 -> /home/sys2/SIS-2/videos/INV1.mp4 (76764171 bytes). STOP enviado.
+- Falta: ./inf_restrita.sh testar com a pasta original (não informado).
+
+### 2026-11-26 — análise do P6 e das dependências (P's) da inf_restrita (só leitura, sem mudança de arquivos)
+- P6 (main 0abc81e, 25/11; develop 50f0eb6 = main menos src/a.txt): listener Python (scripts/p6_listener.py) em python:3.12-slim, sem GPU; README diz que já roda na GCP. Replay publica em Kafka ods.session.started, ods.p4.frame (SÓ metadados, sem pixels: não há SHM/stream) e ods.p6.replay.state, a partir de gravacao_p6.mp4 (vtest.avi do OpenCV, 640x480, 795 quadros) embutido; "gravação" é simulada (só grava linha no SQLite, não consome P4/P5). Sem reply em replay.command. Broker: Dockerfile 200.17.66.56:9093 (IP público da Jetson; CLAUDE.md diz EXTERNAL 9094), kafka_client padrão 34.66.235.91:9093, README cita 172.18.4.56:9092 (anuncia localhost).
+- Conclusão: pela 6c o P6 é camada 1 e substitui P4/P5 como fonte (pixels pelo pipeline de streaming) → deveria estar onde está o P4 (Jetson). Do jeito que está, não entrega quadros a ninguém; colocá-lo na placa não muda nada para o I1 (que lê SHM do P4 ou arquivo, não Kafka).
+- inf_restrita: P2 sim (wheel 0.2.0a1 dentro da imagem do I1; existe 0.2.0a3); B5 sim (pacotes na develop do I1); P4 NÃO (orquestrador lê MP4 de /home/sys2/SIS-2/videos; I1_P4_DIR montado mas nenhum P4 na build); P6 não; P5/P7 não se aplicam. I2/I3 não consomem ods.session.started no código (grep). Sem P4, ninguém publica ods.session.started; o I1 gera o session_id sozinho.
+- Próximo: resposta ao usuário; se ele quiser, compor P4 (perfil video, como no A8) na inf_restrita.
+
+### 2026-11-26 — pergunta: inf_restrita está incompleta frente aos P's e B's?
+- Resposta: completa para o "mínimo pelo código" pedido em 25/11; incompleta para a cadeia da 6c. Faltam P4 (quadros, captured_at, ods.session.started) e a validação pelos contratos centrais B1/B4 (hoje contrato/validar.py usa o schema do próprio repositório). P2, B5 e B3 (Kafka) presentes; B2 só parcial (sem fonte de sessão); P6 não funcional como fonte.
+- Próximo: usuário decide se compõe o P4 (perfil video) e troca a validação para o B4/ods-validator.
+
+### 2026-11-26 — pergunta: o que falta no P6
+- DB: 1 cenário (rec-001 → videos/rec-001.mp4 inexistente), 795 linhas de frame_timestamps de UMA sessão (20/11), usadas para qualquer recording. Sem SEEK/RESTART/previous_session_id; LOOP não gera sessão nova. 3 testes (contrato, banco, estado).
+- Resposta: lista de lacunas (pixels/streaming, gravação real, controle, sessão, replies, broker, empacotamento) → recado para TRA-2; P3 só compõe quando houver saída de quadros.
+
+### 2026-11-26 — pergunta: modo mais performático da Jetson
+- Resposta (comandos para o usuário rodar na placa): nvpmodel -q / conferir id do MAXN SUPER no /etc/nvpmodel.conf, nvpmodel -m <id> (pode pedir reboot), jetson_clocks (com --store antes; não persiste: serviço systemd se quiser), ventoinha; memória: modo texto (multi-user.target) libera RAM. Avisos: placa compartilhada (Kafka de outro grupo), fonte/temperatura, decisão pendente com SIS-1. Nada rodado.
+
+### 2026-11-26 — Jetson: jetson_clocks aplicado (usuário)
+- Estado salvo em /home/ods/clocks-original.conf. Depois: CPU 6× 1,728 GHz fixo, GPU 1020 MHz fixo (8 TPCs), EMC 3199 MHz, ventoinha 255 (máx.), modo NV 25W (MAXN SUPER não aplicado).
+- Leitura: relógios já no teto do Orin Nano Super; o MAXN SUPER só tira o limite de potência (evita redução sob carga longa). Não persiste após reboot. Desfazer: sudo jetson_clocks --restore ~/clocks-original.conf.
+- Próximo sugerido: medir (validacao/i1/testar-i1-tempo-real.sh ou ./inf_restrita.sh testar) e tegrastats; decidir MAXN SUPER e persistência (serviço systemd).
+
+### 2026-11-26 — recapitulação: o que falta para os I's funcionarem plenamente
+- Conferido: builds inf e inf_restrita SEM P4 (cada I lê arquivo). Recap por I (I1–I9) + transversais (P4, P2/engines, P5, P6, B1, Kafka nuvem, disco/memória, jetson_clocks). Só resposta; nenhum arquivo do repo alterado.
+
+### 2026-11-26 — recorte: só os I's do A4 (I1, I2, I3)
+- Descoberto: A4 main c280dea (26/11; build a4 do p3 fixa 9d6cbd4 de antes) roda na VM da GCP (compose.nuvem.yml: back, front, i3 p/ registro) e diz "O I1, o I2 e o I3 rodam na Jetson (camadas 1-2, homologação); o S1, o S4 e o P7 usam o mesmo broker". A4 manda ods.i1.command START/HEARTBEAT(20 s)/STOP, câmera INV1 (source_id = equipe); A4_RELOGIO_QUADRO contorna o captured_at do I1 (carimbo na leitura). Consome ods.s1.position, ods.i3.calibration, ods.p7.state, ods.s4.clip, ods.session.started.
+- I3 main agora 0a7f944 (25/11: "quadra do A4 com source_id INV1"); inf_restrita fixa c3d876e e calibra source_id inf-restrita-quadra (só teste).
+- I1 develop: app-sports 1.2.0 (classe ball, 1280) já em I1_PACOTES.
+- Lacunas: S1 (entre I2 e A4) em nenhuma build da placa (quem roda?); I3 desatualizado e sem calibração INV1; onde roda o I3 (VM e/ou Jetson); teste com START real do A4 nunca feito; captured_at do I1; sem P4 (arquivo INV1.mp4); I2 não reinicia por sessão; builds/a4 do p3 desatualizada.
+
+### 2026-11-26 — inf_restrita: I3 atualizado para 0a7f944
+- Usuário: S1 roda na nuvem; A4 já existe (na nuvem). Pedido: atualizar o I3 e dizer o que mudou.
+- c3d876e → 0a7f944: só HOW_TO_RUN.md (roteiro da Jetson, Kafka da nuvem 34.66.235.91:9093, quadra do A4 com source_id INV1; cal-INV1-1 já publicada pelo INV-1). Código idêntico; Dockerfile não copia o .md → imagem com o mesmo conteúdo.
+- Arquivos: builds/inf_restrita/inf_restrita.env (I3_REF), docker-compose.yml (comentário: I3 daqui calibra só o source_id do teste, para não concorrer com a cal-INV1-1), GUIA-BUILD-INF-RESTRITA.md, CLAUDE.md §5. builds/inf continua em c3d876e.
+- Validado só local: YAML ok (python yaml), ref confere com ls-remote, diff de código vazio. Sem docker compose config (download do binário negado pelo modo auto).
+- Na placa: em vez de reconstruir, docker tag ods-i3:c3d876e… ods-i3:0a7f944… (mesma imagem, 0 bytes); depois ./inf_restrita.sh testar.
+- Próximo: commit (aguarda usuário); teste de ponta a ponta com partida real do A4.
+
+### 2026-11-26 — levantamento: build inf × dependências P/B da 6c (pergunta do usuário)
+- Feito: lido o mapa "Entradas de cada componente" da 6c (ods-6cfinal.html, seção 9) e o código dos I's nos commits do inf.env (clones no scratchpad).
+- Resultado: P2 só no I1 (build i1) e no I7 (GPU); nenhum I da inf lê o P4 hoje (todos por arquivo); I8 em mocks (sem I1/P4/P2); I9 sem P4/P2 (só stdlib); teste da inf conta mensagens, não valida contrato (B1/B4).
+- P4 nativo (usuário: P4 roda na placa fora de container): o P4 grava o socket fixo em /tmp/p4_file_shm; o I1 permanente monta I1_P4_DIR=/var/lib/ods/p4-shm em /tmp → não enxerga. Precisa I1_P4_DIR=/tmp. I7 precisaria de ipc host + /tmp + --p4. I6 espera TCP, não lê P4.
+- Próximo: aguardar o usuário decidir se liga P4 no I1/I7.
+
+### 2026-11-26 — pergunta: falta incluir algum componente na inf_restrita para I1/I2/I3?
+- Resposta: não, no arranjo de hoje (vídeo em arquivo, A4/S1/I3-registro na nuvem). P2/B5 já dentro da imagem do I1. Só o P4, se quiserem câmera ao vivo (cadeia da 6c). Pré-condições fora da build: Kafka da nuvem ligado, I1 permanente parado, INV1.mp4 na pasta da SIS-2, engine app-sports em /var/lib/ods/engines.
+
+### 2026-11-26 — pedido: renomear inf_restrita → inf_a4 + scripts guardar/subir pelo notebook + commit
+- Plano: git mv builds/inf_restrita → builds/inf_a4 e validacao/inf_restrita → validacao/inf_a4 (guia GUIA-BUILD-INF-A4.md); trocar referências (ods.sh, README, CLAUDE.md, testar-inf-repos.sh, testar-i1-servico.sh); projeto ods-inf_a4, grupo ods-i1-inf-a4 (I1 usa auto.offset.reset=latest: grupo novo não relê comandos), source_id/versão do teste do I3 inf-a4-*.
+- Scripts (rodam NO NOTEBOOK, ssh na placa, sem arquivo na placa): builds/inf_a4/guardar-no-notebook.sh (ssh docker save | zstd → ~/ods-imagens/inf_a4-<data>/; engines por tar num container root; manifesto) e builds/inf_a4/subir-do-notebook.sh (confere refs e disco, zstd -dc | ssh docker load, engines, ./inf_a4.sh subir).
+- Na placa, antes do git pull: ./inf_restrita.sh parar (projeto antigo); depois mover resultados/.
+- Commit: só I3 + renomeação + scripts (A2 continua fora).
+
+### 2026-11-26 — inf_restrita → inf_a4 + scripts do notebook (feito)
+- Arquivos: git mv builds/inf_restrita → builds/inf_a4 (inf_a4.sh/.env/.local.env.exemplo), validacao/inf_restrita → validacao/inf_a4 (GUIA-BUILD-INF-A4.md); referências em ods.sh, README, CLAUDE.md, testar-inf-repos.sh, testar-i1-servico.sh. Projeto ods-inf_a4, grupo ods-i1-inf-a4, source_id/versão do teste do I3 inf-a4-quadra / cal-inf-a4-quadra-1. Nome histórico aceite-inf_restrita-20261125-* mantido no guia.
+- Novos: builds/inf_a4/guardar-no-notebook.sh e subir-do-notebook.sh (rodam no notebook; ssh com ControlMaster; docker save|zstd e zstd -dc|docker load; engines por tar num container da imagem do I3; manifesto + SHA256SUMS; confere *_REF do p3 da placa; disco = tar + 4 GB, FORCAR=1).
+- Achado na simulação: python3 do notebook é atalho do asdf sem versão nesta pasta → scripts sem python (só zstd/tar/awk).
+- Validado: bash -n em todos; simulação (scratchpad/sim, ssh e docker falsos): guardar, subir, 2ª subida, commit diferente, placa sem build, imagem ausente, pasta corrompida, disco insuficiente. Sem shellcheck e sem docker compose config (binários ausentes; download negado).
