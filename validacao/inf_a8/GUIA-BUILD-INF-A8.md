@@ -2,11 +2,12 @@
 
 Guia de execução e de teste da build `builds/inf_a8` (P3 · SIS-1), montada em 27/11/2026.
 
-**Estado (27/11/2026):** validada só fora da placa: `bash -n`, YAML, o ritmo do `i7_continuo.py` com um
+**Estado (27/11/2026):** na Jetson, com o Kafka da nuvem e o `cam0.mp4`, `./inf_a8.sh testar` PASSOU 5,
+FALHOU 0, AVISO 0 (9 placas válidas, detector `-fp16`, captura → publicação em 0,1 s, sem reinício):
+`evidencias/aceite-inf_a8-20261127-020650.txt`. Antes, validada fora da placa: `bash -n`, YAML, o ritmo do `i7_continuo.py` com um
 `cv2` falso, o validador com eventos montados pelo publicador do próprio I7, e os scripts contra um
 `docker` simulado (subida, teste nos caminhos de sucesso e de falha, `i1`, `status` e a troca no
-`ods.sh`). **Ainda não rodou na Jetson**, e falta o `docker compose config` real, porque o notebook não
-tem o plugin do Compose.
+`ods.sh`). O 1º teste na placa, com o `VER5.mp4`, não publicou nada (placas estrangeiras; ver §3).
 
 ## 1. Para que serve
 

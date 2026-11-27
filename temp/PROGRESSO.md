@@ -442,3 +442,25 @@
 - O usuário mostrou que a pasta da SIS-2 só tem INV1/INV2/VER2/VER2_2/VER5 e que a câmera real do P4 não funciona.
 - inf_a8.env: I7_VIDEO_DIR=/var/lib/ods/videos, I7_VIDEO=cam0.mp4. Comentários, guia, README e CLAUDE.md ajustados. Sem commit.
 - Na placa: testar antes pelo inf_a8.local.env, ou fazer commit + git pull.
+
+### 2026-11-27 — inf_a8 validada na Jetson (cam0.mp4)
+- ./inf_a8.sh testar PASSOU 5/0/0: 9 placas válidas (OVK7900…), -fp16, atraso 0,1 s, RestartCount 0, 3 voltas, RAM 3,8 GB. plate_read 44→53 na nuvem.
+- Evidência em validacao/inf_a8/evidencias/aceite-inf_a8-20261127-020650.txt. Próximo: guardar-no-notebook.sh (no notebook); commit da evidência (aguarda o usuário).
+
+### 2026-11-27 — build inf_a2 (I6 contínuo para o A2)
+- O usuário está guardando a inf_a8 no notebook. Pedido: a inf_a2 e depois a próxima melhor aplicação.
+- Arquivos (builds/inf_a2/): inf_a2.env, docker-compose.yml (i6 com a mesma imagem da inf, mais o i6-gerar-video), codigo_a2.py (AES pelo openssl, chave por env), i6/gerar_video_qr_a2.py, contrato/validar_i6.py, inf_a2.sh, limpar.sh, preparar-codigo.sh, secrets e local .exemplo, guardar/subir-do-notebook.
+- Outros arquivos: builds/comum/ritmo_video.py (genérico); ods.sh com NUVEM=(inf_a2 inf_a4 inf_a8); guia; README; CLAUDE.md; journal.
+- Validação (só no notebook):
+  - o código gerado passou no liberar_entrada do A2 72cedda;
+  - vídeo gerado com opencv-contrib 5.1 (venv no scratchpad) e lido pelo pyzbar no ritmo do vídeo (2,1 s);
+  - validar_i6 com o leitor.py real (code_type QR_CODE);
+  - inf_a2.sh contra docker falso: subir, regerar, testar 5/0/0, outra chave, sem leituras, chave curta.
+- Pendente: confirmar com a VER-2 a chave do A2 da nuvem; rodar na placa.
+
+### 2026-11-27 — build inf_a1 (I8 contínuo para o A1)
+- Próxima aplicação: o A1 (consome ods.industria.defeito_classificado 2.0). O A3 e o A5 só consomem S1–S4; o A6 e o A7 dependem do I4 e do I5, que estão fora.
+- O I8 051851f não tem imagens nem manifesto real (docs/sprints/sprint-3.md), então não há inferência real. A build roda em laço o publicador oficial com os 4 mocks 2.0 (comum/i8/publicar_exemplos.py), a cada 60 s.
+- Arquivos (builds/inf_a1/): inf_a1.env (I8 051851f e A1 5d17305, o mesmo clone da inf; idêntico ao HEAD 5e0f07e nos arquivos usados), docker-compose.yml (laço sh), inf_a1.sh (testar, i1 VER1 com source /videos-p3, status), contrato/validar_a1.py (o contracts.py do A1 carregado pelo caminho), limpar.sh, preparar-codigo.sh, guardar/subir-do-notebook.
+- Outros arquivos: ods.sh com NUVEM=(inf_a1 inf_a2 inf_a4 inf_a8); guia; README; CLAUDE.md; journal.
+- Validação (só no notebook): os mocks preparados passaram 4/4 no validate_piece_analysis do A1 (jsonschema no venv); inf_a1.sh contra docker falso: subir, testar 3/0/0, parado 1/2/0, i1, status.

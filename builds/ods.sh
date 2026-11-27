@@ -10,13 +10,14 @@
 #   ./ods.sh trocar <app>          remove as outras builds (--imagens) e sobe <app>
 #                                  (<app> = a1 … a8, inf: todas as inferências, ou
 #                                  inf_a4: só I1, I2 e I3 para o A4, com I1 próprio no Kafka da nuvem,
-#                                  inf_a8: I7 contínuo para o A8, no Kafka da nuvem)
+#                                  inf_a8: I7 contínuo para o A8, inf_a2: I6 contínuo para o A2,
+#                                  inf_a1: I8 contínuo para o A1, todas no Kafka da nuvem)
 #                                  (a build permanente do I1 fica de pé e com a imagem)
 #                                  "trocar inf" mantém e sobe antes a inf_a4: a inf usa o I1 e o
 #                                  I2 dela (27/11/2026)
-#                                  inf_a4 e inf_a8 atendem as aplicações da NUVEM e convivem: trocar
-#                                  para uma delas (ou para a inf) não derruba a outra. Trocar para
-#                                  uma aplicação (a1 … a8) derruba as duas
+#                                  inf_a1, inf_a2, inf_a4 e inf_a8 atendem as aplicações da NUVEM e convivem:
+#                                  trocar para uma delas (ou para a inf) não derruba as outras. Trocar para
+#                                  uma aplicação (a1 … a8) derruba todas elas
 #   ./ods.sh trocar <app> --dados  idem, apagando também os volumes das outras (pede confirmação de cada uma)
 #   ./ods.sh trocar <app> --codigo idem, apagando também os clones que só as outras usam
 #   ./ods.sh subir <app> [--reconstruir]   só sobe <app> (= builds/<app>/<app>.sh subir)
@@ -40,7 +41,7 @@ erro()  { echo "${R}✘ $*${N}" >&2; exit 1; }
 
 ajuda() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$SCRIPT"; }
 
-apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/ "$DIR"/inf_a4/ "$DIR"/inf_a8/; do d=${d%/}; d=${d##*/}; [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; }
+apps() { local d; for d in "$DIR"/a[0-9]*/ "$DIR"/inf/ "$DIR"/inf_a1/ "$DIR"/inf_a2/ "$DIR"/inf_a4/ "$DIR"/inf_a8/; do d=${d%/}; d=${d##*/}; [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; }
 # Serviços permanentes (ex.: i1): aparecem na lista, mas o "trocar" não os remove.
 permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d"; done; return 0; }
 
@@ -49,11 +50,11 @@ permanentes() { local d; for d in i1; do [[ -f "$DIR/$d/$d.env" ]] && echo "$d";
 base_de() { case "$1" in inf) echo inf_a4 ;; esac; return 0; }
 # Builds que servem as aplicações da nuvem (27/11/2026): ficam de pé quando a troca é para uma
 # delas ou para a inf (a A4 e a A8 da nuvem não perdem as inferências).
-NUVEM=(inf_a4 inf_a8)
+NUVEM=(inf_a1 inf_a2 inf_a4 inf_a8)
 convivem_com() {   # convivem_com <app>: builds que o "trocar <app>" não remove (fora a própria)
   local n
   case "$1" in
-    inf|inf_a4|inf_a8) for n in "${NUVEM[@]}"; do [[ "$n" != "$1" ]] && echo "$n"; done ;;
+    inf|inf_a1|inf_a2|inf_a4|inf_a8) for n in "${NUVEM[@]}"; do [[ "$n" != "$1" ]] && echo "$n"; done ;;
   esac
   return 0
 }

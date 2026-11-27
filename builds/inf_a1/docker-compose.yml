@@ -1,0 +1,78 @@
+# ODS — build "inf_a1": I8 contínuo para o A1 da nuvem (P3 / SIS-1).
+#
+#   cd builds/inf_a1 && ./inf_a1.sh     (confere a placa, baixa o código, constrói o que falta, sobe)
+#
+# Variáveis em inf_a1.env (commits fixados, Kafka, intervalo). Sem segredos.
+#
+# Desenho (27/11/2026):
+#   - O A1 roda na NUVEM (VER-1) e consome ods.industria.defeito_classificado 2.0. Esta build publica
+#     no Kafka da NUVEM; o container "kafka" da turma na placa continua rodando (o inf_a1.sh confere e
+#     nunca o para).
+#   - Contínuo (sobe com "up"): i8, o publicador oficial do I8 reenviando, a cada I8_INTERVALO_S, os 4
+#     eventos de exemplo do próprio I8 (shared/mocks/kafka-2.0), com ids e horários novos. São eventos
+#     SINTÉTICOS (artifact_version p3-exemplos-i8): o I8 não tem imagens nem manifesto real para inferir.
+#   - Sob demanda: nada aqui. O I1 (VER1, peças) é o da inf_a4 (./inf_a1.sh i1).
+#   - Fora: P7 (pan-tilt que o A1 comanda: sem Kafka na SIS-2), S4/S5 (serviços).
+#
+# Dependências pela 6c (lidas nos repositórios em 27/11/2026):
+#   I8  ← A1 (taxonomia de defeitos defects-a1-1.0.0, shared/artifacts do repositório do A1), I1 (no
+#         desenho da 6c, a peça detectada; o replay do I8 aceita detecções, mas sem imagens reais não roda).
+#
+# Tópicos (no Kafka da build):
+#   i8  (eventos de exemplo do I8) -> ods.industria.defeito_classificado
+name: ods-inf_a1
+
+x-log: &log
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+
+  kafka-topicos:
+    # Cria, se ainda não existir, o tópico desta build no Kafka da build. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        kafka-topics --bootstrap-server ${KAFKA_BROKER:?defina KAFKA_BROKER} --create --if-not-exists
+        --topic ${I8_TOPICO:?defina I8_TOPICO} --partitions 1 --replication-factor 1
+
+  # ================================================================ I8 · inspeção de peças (VER-1)
+  i8:
+    # A MESMA imagem da build inf e do A1 (ods-i8-publisher:<I8_REF>, mesma receita): se já existe, não
+    # constrói. O publicar_exemplos.py (builds/comum/i8, do P3) refaz ids e horários dos mocks e chama o
+    # publicador oficial do I8 (scripts.publish_events), que valida contra o contrato 2.0 e a taxonomia
+    # do A1 e exige confirmação de entrega.
+    # Contínuo pelo P3: uma rodada, pausa de I8_INTERVALO_S, outra. Se uma rodada falhar (código ≠ 0),
+    # o laço sai e o Docker reinicia o container (restart: unless-stopped; o RestartCount conta as falhas).
+    build:
+      context: ${SRC_DIR}/i8
+      dockerfile: validacao-local/Dockerfile.publisher
+    image: ods-i8-publisher:${I8_REF:?fixe o commit do i8}
+    restart: unless-stopped
+    <<: *log
+    user: "${UID_GID:-1000:1000}"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        n=0
+        while :; do
+          n=$$((n + 1))
+          echo "[P3] rodada $$n: 4 eventos de exemplo do I8 em $$KAFKA_TOPIC"
+          python /p3/i8/publicar_exemplos.py || exit $$?
+          echo "[P3] fim da rodada $$n; a próxima em $${I8_INTERVALO_S}s"
+          sleep "$$I8_INTERVALO_S"
+        done
+    environment:
+      KAFKA_BROKER_URL: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ${I8_TOPICO}
+      I8_INTERVALO_S: ${I8_INTERVALO_S:-60}
+      I8_TAXONOMIA_DIR: /taxonomias/${I8_TAXONOMIA_VERSAO:?defina I8_TAXONOMIA_VERSAO}
+      I8_TAXONOMIA_VERSAO: ${I8_TAXONOMIA_VERSAO}
+    volumes:
+      - ../comum/i8:/p3/i8:ro
+      - ${SRC_DIR}/a1/shared/artifacts/defect-taxonomy:/taxonomias:ro
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }

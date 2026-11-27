@@ -66,6 +66,24 @@ reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
 Chamava-se `inf_restrita` até 26/11/2026. Guardar no notebook e subir de lá sem reconstruir (rodam no
 notebook, por ssh): `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]` (guia, seção 4.1).
 
+## Build inf_a1: I8 contínuo para o A1 da nuvem
+
+| Build | Sobe por padrão | Sob demanda | Testes | Guia |
+|---|---|---|---|---|
+| `inf_a1/` | `i8` **contínuo**: o publicador oficial do I8 reenvia os 4 eventos de exemplo dele (SINTÉTICOS) a cada 60 s | `./inf_a1.sh i1 [QUADROS]` (VER1, peças, pelo I1 da `inf_a4`) | `./inf_a1.sh testar` (eventos novos, as 4 classificações e contrato pelo validador do próprio A1) | [`validacao/inf_a1/GUIA-BUILD-INF-A1.md`](../validacao/inf_a1/GUIA-BUILD-INF-A1.md) |
+
+Kafka **da nuvem**, onde o A1 (VER-1) consome `ods.industria.defeito_classificado` 2.0. O I8 não tem imagens
+para inferir: os eventos são os de exemplo do próprio I8 (`artifact_version` `p3-exemplos-i8`). Mesma imagem do I8 da `inf/`.
+
+## Build inf_a2: I6 contínuo para o A2 da nuvem
+
+| Build | Sobe por padrão | Sob demanda | Testes | Guia |
+|---|---|---|---|---|
+| `inf_a2/` | `i6` **contínuo** (CPU), vídeo de QR do P3 em laço, no ritmo do vídeo, `source_id` `cam0` (catraca-01) | `./inf_a2.sh qr` (gera de novo o código e o vídeo) | `./inf_a2.sh testar` (leituras novas, código aceito pelas regras do A2, atraso ≤ 2 s e contrato com o validador do I6) | [`validacao/inf_a2/GUIA-BUILD-INF-A2.md`](../validacao/inf_a2/GUIA-BUILD-INF-A2.md) |
+
+Kafka **da nuvem**, onde o A2 (VER-2) consome `ods.i6.code_read`. O QR é gerado pelo P3 no formato do A2
+(AES-256 com CPF de teste e validade; chave no `inf_a2.secrets.env`, fora do Git). Mesma imagem do I6 da `inf/`.
+
 ## Build inf_a8: I7 contínuo para o A8 da nuvem
 
 | Build | Sobe por padrão | Sob demanda | Testes | Guia |

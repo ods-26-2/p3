@@ -1,0 +1,15 @@
+Teste de aceitação da build inf_a8 — 2026-11-27 02:08:05 — ods-pc
+Kafka: 34.66.235.91:9093 · I7 1441bbb, cam0.mp4 em laço (tempo real: sim), source_id cam-entrada · desde 2026-11-27T05:06:50Z
+Memória disponível: 3811 MB → 3812 MB
+
+T-I7C  PASSOU  I7 contínuo, sem reinício                running; RestartCount 0; 3 volta(s) no log
+T-I7   PASSOU  I7 leituras (cam-entrada)                  9 de 9 mensagens novas: OVK7900,ODI9001,ODA4357,PPY1001,OYD7576,MTK6939,OAU0530,OXG8134,ODF4990
+T-I7G  PASSOU  I7 na GPU (TensorRT)                       artifact_version app-plates-1.0.0-fp16+cct-s-v2-global (das mensagens)
+T-I7T  PASSOU  captured_at recente (A8 abre a cancela)    maior atraso captura→publicação 0.1 s (máximo 120 s)
+T-C1   PASSOU  contrato ods.i7.plate_read (validador do I7) 9 de 9 válidas
+
+Mensagens por tópico, todas as origens (antes → depois):
+  ods.i1.command                    466 →      466
+  ods.i7.plate_read                  44 →       53
+
+Resumo: PASSOU 5, FALHOU 0, AVISO 0

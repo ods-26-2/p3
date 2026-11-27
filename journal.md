@@ -29,7 +29,9 @@ cada pedido** (o mais novo em cima em cada seção).
 |---|---|---|---|---|
 | `inf_a4` (era `inf_restrita`) | I1 próprio (GPU) + I2; I3 sob demanda | nuvem | De pé | 25/11: `testar` PASSOU 10/0/0 (nuvem). 27/11: `./inf_a4.sh p4` (P4 da SIS-2 → I1): 150 detecções e 150 trilhas, relatório `.txt` não conferido |
 | `i1` (permanente) | orquestrador do I1 | nuvem | **Fica parado** (decisão de 27/11: a `inf` usa o I1 da `inf_a4`) | 24/11: `testar` PASSOU 16, AVISO 1 |
-| `inf_a8` | I7 **contínuo** (VER5.mp4 em laço, no ritmo do vídeo, `cam-entrada`) para o A8 da nuvem; I1 VER5 sob demanda pela `inf_a4` | nuvem | **De pé na placa (27/11, informado pelo usuário)**; falta comprimir e copiar para o notebook (`./guardar-no-notebook.sh`) | relatório do `testar` ainda não trazido |
+| `inf_a1` | I8 **contínuo** (4 eventos de exemplo do I8, SINTÉTICOS, a cada 60 s) para o A1 da nuvem; I1 VER1 sob demanda pela `inf_a4` | nuvem | **Nova em 27/11, não rodada na placa** | — (só no notebook) |
+| `inf_a2` | I6 **contínuo** (vídeo de QR do P3, aceito pelas regras do A2, `cam0`) para o A2 da nuvem | nuvem | **Nova em 27/11, não rodada na placa** | — (só no notebook) |
+| `inf_a8` | I7 **contínuo** (VER5.mp4 em laço, no ritmo do vídeo, `cam-entrada`) para o A8 da nuvem; I1 VER5 sob demanda pela `inf_a4` | nuvem | **De pé na placa**; falta comprimir e copiar para o notebook (`./guardar-no-notebook.sh`) | **27/11 (nuvem, `cam0.mp4`): `testar` PASSOU 5/0/0** |
 | `inf` | I3, I6, I7, I8, I9 **sobre a `inf_a4`** (usa o I1 e o I2 dela desde 27/11); **I4 e I5 fora** | nuvem | De pé (sobre a `inf_a4`) | **27/11 (nuvem): `testar` PASSOU 8, FALHOU 0, AVISO 2** (I4, I5 fora) |
 | `a8` | A8 + cadeia P4 → I1 → I2 → S1 → S4/S5 + I7 | placa | Referência | 14/11: PASSOU 11, FALHOU 2 (esperados). Imagens guardadas no PC em 25/11 |
 | `a5` | A5 + P4 → I1 (EPI) → I9/I2 → S1, S3, S4 | placa | Validada com falhas conhecidas | 18/11: PASSOU 9, FALHOU 2, BLOQUEADO 1, AVISO 1 |
@@ -43,6 +45,8 @@ cada pedido** (o mais novo em cima em cada seção).
 
 | Data | Pedido | Resultado |
 |---|---|---|
+| 27/11 | Fazer a `inf_a2` e a build da próxima melhor aplicação (o usuário está guardando a `inf_a8` no notebook) | `inf_a2`: I6 contínuo com um QR gerado pelo P3 no formato do A2 (validado com o código da VER-2), validada no notebook. Próxima aplicação: **A1** (`inf_a1`: o publicador oficial do I8 com os 4 eventos de exemplo dele, SINTÉTICOS porque o I8 não tem imagens, em laço; os eventos passaram 4/4 no validador do A1). O A3 e o A5 só consomem serviços, e o A6 e o A7 dependem do I4 e do I5, que estão fora. As duas builds foram validadas só no notebook |
+| 27/11 | Trouxe o `./inf_a8.sh testar` com o `cam0.mp4` | **PASSOU 5, FALHOU 0, AVISO 0**: 9 placas válidas no Kafka da nuvem, na GPU, captura→publicação em 0,1 s, sem reinício. Falta guardar a `inf_a8` no notebook |
 | 27/11 | A pasta da SIS-2 só tem INV1, INV2, VER2, VER2_2 e VER5; a câmera real do P4 não funciona | O `cam0.mp4` está na pasta do P3 (`/var/lib/ods/videos`) e passou a ser o padrão da `inf_a8` (`I7_VIDEO_DIR`/`I7_VIDEO`), com o VER5.mp4 só para o I1. Sem commit |
 | 27/11 | Trouxe o log do I7 da `inf_a8` | Ritmo e GPU OK: VER5.mp4 tem 300 s a 60 q/s e o I7 lê 2 q/s com `-fp16`. As placas do VER5.mp4 não são brasileiras (ex.: `34A36837`): todas saem "Inválida" e nada é publicado. Proposto trocar para o `cam0.mp4` da VER-5 (aguarda o usuário); espera do teste subiu para 420 s |
 | 27/11 | Trouxe o 1º `./inf_a8.sh testar` da placa | PASSOU 1, FALHOU 3, AVISO 2: o I7 ficou de pé sem reinício, mas não publicou nenhuma placa em 300 s (ainda na 1ª volta). Causa a apurar pelo log. O T-I7G passou a ler a versão do log quando não há mensagens, e o relatório mostra o progresso do I7 quando não há leitura (sem commit) |
@@ -193,6 +197,7 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 
 | Data | Build | Resultado | Onde |
 |---|---|---|---|
+| 27/11 | `inf_a8` (nuvem, `cam0.mp4`) | PASSOU 5, FALHOU 0, AVISO 0: 9 placas válidas, `-fp16`, 0,1 s, RAM 3,8 GB livres | `validacao/inf_a8/evidencias/aceite-inf_a8-20261127-020650.txt` |
 | 27/11 | `inf_a8` (nuvem) | PASSOU 1, FALHOU 3, AVISO 1: I7 de pé, sem placa publicada em 300 s | `validacao/inf_a8/evidencias/aceite-inf_a8-20261127-014819.txt` |
 | 27/11 | `inf` sobre a `inf_a4` (nuvem) | PASSOU 8, FALHOU 0, AVISO 2 (I4, I5 fora); I7 `-fp16`; I1 sem reinício; RAM 3,9 GB livres | `validacao/inf/evidencias/aceite-inf-20261127-005013.txt` |
 | 27/11 | `inf_a4` + P4 | P4 → I1: 150 detecções e 150 trilhas; sessão e `source_id` do P4 propagados; I1 perdeu ~616 quadros na partida (~13,5 s de carga) e processou ~18 quadros/s com o P4 a 30 | Logs trazidos pelo usuário (relatório `.txt` pendente) |

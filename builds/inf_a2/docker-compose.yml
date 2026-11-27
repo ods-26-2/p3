@@ -1,0 +1,90 @@
+# ODS — build "inf_a2": I6 contínuo para o A2 da nuvem (P3 / SIS-1).
+#
+#   cd builds/inf_a2 && ./inf_a2.sh     (confere a placa, baixa o código, constrói o que falta, sobe)
+#
+# Variáveis em inf_a2.env (commit fixado, Kafka, vídeo, código do QR). A chave AES do A2 fica no
+# inf_a2.secrets.env (fora do Git) e só é usada pelo inf_a2.sh na placa, para gerar o vídeo: não entra
+# em nenhum container.
+#
+# Desenho (27/11/2026):
+#   - O A2 roda na NUVEM (VER-2, main 72cedda) e consome ods.i6.code_read: decifra o QR (AES-256 com
+#     CPF e validade), confere a janela de validade e aciona a catraca ligada ao source_id (cam0 →
+#     catraca-01). Esta build publica no Kafka da NUVEM; o container "kafka" da turma na placa continua
+#     rodando (o inf_a2.sh confere e nunca o para).
+#   - Contínuo (sobe com "up"): i6, em modo teste, lendo VIDEO_DIR/I6_VIDEO em laço, como a câmera da
+#     catraca. Com I6_TEMPO_REAL=sim, no ritmo do vídeo (comum/ritmo_video.py, do P3): uma leitura por
+#     volta, uma "pessoa" a cada A2_QR_INTERVALO_S.
+#   - Sob demanda: i6-gerar-video (o inf_a2.sh roda quando o código do QR falta, muda ou vai vencer).
+#   - Fora: as outras inferências (o A2 só consome o I6). O S4 que o A2 chama para a foto da
+#     passagem (ods.s4.capture.command) é um serviço, não está aqui.
+#
+# Dependências pela 6c (lidas nos repositórios em 27/11/2026):
+#   I6  ← P4 (opcional: o I6 89143c9 lê o P4 por SHM; a câmera real do P4 não funciona, então o vídeo
+#         faz o papel dela). Sem P2 nem modelo (pyzbar/OpenCV em CPU).
+#
+# Tópicos (no Kafka da build):
+#   i6  (a2-qr.mp4 em laço) -> ods.i6.code_read
+name: ods-inf_a2
+
+x-log: &log
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+
+  kafka-topicos:
+    # Cria, se ainda não existir, o tópico desta build no Kafka da build. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        kafka-topics --bootstrap-server ${KAFKA_BROKER:?defina KAFKA_BROKER} --create --if-not-exists
+        --topic ods.i6.code_read --partitions 1 --replication-factor 1
+
+  # ================================================================ I6 · QR (VER-2)
+  i6:
+    # A MESMA imagem da build inf (ods-i6:<I6_REF>, mesma receita): se já existe, não constrói.
+    # O ritmo do vídeo é do P3 (comum/ritmo_video.py troca só o cv2.VideoCapture e roda o leitor.py
+    # do I6 como __main__, sem editar o código). Desfazer: I6_TEMPO_REAL=nao no inf_a2.local.env.
+    # Sem o vídeo (1ª subida), o I6 tenta abrir de novo a cada I6_TEST_RECONNECT_SECONDS até o
+    # inf_a2.sh gerá-lo.
+    build: ${SRC_DIR}/i6/DetectorQR
+    image: ods-i6:${I6_REF:?fixe o commit do i6}
+    restart: unless-stopped
+    <<: *log
+    init: true
+    command: ["python", "-u", "/p3/ritmo_video.py", "/app/leitor.py"]
+    environment:
+      RITMO_VIDEO: ${I6_TEMPO_REAL:-sim}
+      I6_TEST_MODE: "true"
+      I6_TEST_CAMERAS_JSON: '[{"source_id":"${I6_SOURCE_ID:-cam0}","url":"/videos/${I6_VIDEO:?defina I6_VIDEO}"}]'
+      I6_TEST_RECONNECT_SECONDS: "2.0"
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BROKER}
+      KAFKA_TOPIC: ods.i6.code_read
+      I6_ARTIFACT_VERSION: i6-qrcode-reader-2.0
+    volumes:
+      # Pasta de vídeos do P3: só leitura, e sem criar a pasta se ela faltar (o up falha)
+      - type: bind
+        source: ${VIDEO_DIR:?defina VIDEO_DIR}
+        target: /videos
+        read_only: true
+        bind: { create_host_path: false }
+      - ../comum/ritmo_video.py:/p3/ritmo_video.py:ro
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+  i6-gerar-video:
+    # Gera VIDEO_DIR/I6_VIDEO com o QR do código A2_QR_CODIGO (calculado pelo inf_a2.sh na placa) com
+    # o OpenCV da própria imagem do I6. Exemplo do P3, não da VER-2.
+    image: ods-i6:${I6_REF}
+    pull_policy: never
+    profiles: [i6]
+    restart: "no"
+    user: "${UID_GID:-1000:1000}"
+    command: ["python", "-u", "/p3/i6/gerar_video_qr_a2.py", "/videos/${I6_VIDEO}",
+              "--texto", "${A2_QR_CODIGO:-}", "--segundos", "${A2_QR_INTERVALO_S:-30}"]
+    volumes:
+      - ./i6:/p3/i6:ro
+      - ${VIDEO_DIR}:/videos

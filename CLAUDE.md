@@ -184,7 +184,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - **Guardar/restaurar pelo notebook** (26/11, rodam NO NOTEBOOK, por `ssh`, sem arquivo na placa): `builds/inf_a4/guardar-no-notebook.sh` (`docker save` das 3 imagens + engines do I1 → `~/ods-imagens/inf_a4-<data>/`) e `builds/inf_a4/subir-do-notebook.sh [pasta]` (confere commits e disco, `docker load`, engines, `./inf_a4.sh subir`). De fora do laboratório: `--comprimir-na-placa` / `--descomprimir-na-placa` (zstd ou gzip na placa, `nice 19`) e `JETSON=<endereço>`.
 - **Jetson 25/11, Kafka da nuvem:** `./inf_a4.sh testar` PASSOU 10/0/0 (antes da troca para a pasta original); do notebook, os 5 tópicos aparecem na nuvem.
 
-### Build "inf_a8": I7 contínuo para o A8 da nuvem (27/11/2026; ainda não rodada na Jetson)
+### Build "inf_a8": I7 contínuo para o A8 da nuvem (27/11/2026; Jetson: PASSOU 5/0/0 na nuvem)
 
 - **Projeto e serviço:** `builds/inf_a8/` (projeto `ods-inf_a8`) sobe só o `i7` contínuo. A imagem `ods-i7-gpu:1441bbb` é a mesma da `inf`, com a mesma receita. A engine `app-plates-1.0.0` é a da `inf_a4`.
 - **Entrada:** lê o `cam0.mp4` de `/var/lib/ods/videos` (só leitura, `create_host_path: false`) em laço. Não usa o `VER5.mp4` da SIS-2: as placas dele não são brasileiras, e o I7 descartou todas como "Inválida" na placa em 27/11. A câmera real do P4 não funciona. Segue com pausa de `I7_PAUSA_S`. O laço está no comando do compose: se o I7 falhar, o container sai e o Docker reinicia.
@@ -195,7 +195,29 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
   - O I3 e o I6 ficam de fora, porque o A8 não os consome.
 - **Convivência:** `ods.sh` tem `NUVEM=(inf_a4 inf_a8)`. Trocar para uma delas, ou para a `inf`, mantém as duas; trocar para uma aplicação derruba as duas, com aviso.
 - **Testes:** `./inf_a8.sh testar` (T-I7C, T-I7, T-I7G, T-I7T, T-C1, com o `validar_evento` do I7 dentro da imagem). Guardar e subir pelo notebook com `guardar-no-notebook.sh` e `subir-do-notebook.sh`. Guia: `validacao/inf_a8/GUIA-BUILD-INF-A8.md`.
-- **Validação:** só simulada até agora (`docker` falso, `cv2` falso e eventos do publicador do I7).
+- **Jetson 27/11, Kafka da nuvem, `cam0.mp4`:** `./inf_a8.sh testar` PASSOU 5/0/0 (9 placas válidas, `-fp16`, captura→publicação 0,1 s, RAM 3,8 GB livres) — `validacao/inf_a8/evidencias/aceite-inf_a8-20261127-020650.txt`. O 1º teste, com o VER5.mp4, não publicou nada (placas estrangeiras).
+
+### Build "inf_a1": I8 contínuo para o A1 da nuvem (27/11/2026; ainda não rodada na Jetson)
+
+- **Projeto e serviço:** `builds/inf_a1/` (projeto `ods-inf_a1`) sobe só o `i8` contínuo. A imagem `ods-i8-publisher:051851f` é a mesma da `inf` e do `a1`.
+- **O que publica:** o comando faz um laço que roda o `comum/i8/publicar_exemplos.py` (publicador oficial do I8 com os 4 eventos de exemplo dele) a cada `I8_INTERVALO_S` (60 s), em `ods.industria.defeito_classificado` 2.0. Os eventos são **SINTÉTICOS** (`artifact_version` `p3-exemplos-i8`): o I8 não tem imagens nem manifesto real (docs do I8, sprint 3).
+- **I1:** VER1 sob demanda pela `inf_a4` (`./inf_a1.sh i1`, `"source": "/videos-p3/VER1.mp4"`).
+- **A1:** fixado em `5d17305`, o mesmo da `inf` e do `a1`, porque o clone `SRC_DIR/a1` é um só. A taxonomia, os schemas e o `contracts.py` são idênticos aos do HEAD `5e0f07e`.
+- **Testes:** `./inf_a1.sh testar` (T-I8C, T-I8, T-C1). O T-C1 usa o validador do consumidor (`backend/contracts.py` do A1) dentro da imagem do I8. Guia: `validacao/inf_a1/GUIA-BUILD-INF-A1.md`.
+- **Validação:** só no notebook. Os 4 eventos passaram no validador do A1 (4/4).
+
+### Build "inf_a2": I6 contínuo para o A2 da nuvem (27/11/2026; ainda não rodada na Jetson)
+
+- **Projeto e serviço:** `builds/inf_a2/` (projeto `ods-inf_a2`) sobe só o `i6` contínuo. A imagem `ods-i6:89143c9` é a mesma da `inf`.
+- **Entrada:** em modo teste, o I6 lê em laço o `VIDEO_DIR/a2-qr.mp4`, no ritmo do vídeo (`builds/comum/ritmo_video.py`, do P3). O `source_id` é `cam0`, que o `catracas.json` do A2 liga à `catraca-01`.
+- **QR válido para o A2:**
+  - o `codigo_a2.py` monta os 16 bytes (base do CPF de teste, validade de 30 dias, dias da semana) e o `openssl` da placa cifra com AES-256-ECB; o texto do QR é o hex;
+  - o vídeo sai do OpenCV da imagem do I6 (`i6/gerar_video_qr_a2.py`);
+  - o `inf_a2.sh` refaz o código e o vídeo se o vídeo faltar, se o CPF ou o intervalo mudar, se faltar menos de 1 dia para vencer ou se a chave mudar; para forçar, `./inf_a2.sh qr`;
+  - a chave `A2_AES_KEY` fica no `inf_a2.secrets.env`; sem ele, vale a de teste do A2 (`"a"` × 32);
+  - **falta confirmar com a VER-2 qual chave o A2 da nuvem usa.**
+- **Testes:** `./inf_a2.sh testar` (T-I6C, T-I6, T-I6Q com as regras do A2, T-I6T até 2 s, T-C1 com o `validar_evento_i6`). Guia: `validacao/inf_a2/GUIA-BUILD-INF-A2.md`.
+- **Validação:** só no notebook. O código passou pelo `liberar_entrada` do próprio A2, e o vídeo foi lido pelo `pyzbar`. Falta rodar na placa.
 
 **Tags no p3:** `a8-minimo-v1` (A8 + I7). A cadeia foi validada em 12/11/2026; a tag `a8-cadeia-v1` foi proposta e precisa ser conferida com o usuário.
 
