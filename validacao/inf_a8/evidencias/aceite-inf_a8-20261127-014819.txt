@@ -1,0 +1,15 @@
+Teste de aceitação da build inf_a8 — 2026-11-27 01:53:38 — ods-pc
+Kafka: 34.66.235.91:9093 · I7 1441bbb, VER5.mp4 em laço (tempo real: sim), source_id cam-entrada · desde 2026-11-27T04:48:19Z
+Memória disponível: 3752 MB → 3949 MB
+
+T-I7C  PASSOU  I7 contínuo, sem reinício                running; RestartCount 0; 1 volta(s) no log
+T-I7   FALHOU  I7 leituras (cam-entrada)                  nenhuma em 300s (./inf_a8.sh log)
+T-I7G  FALHOU  I7 na GPU (TensorRT)                       artifact_version '-' (esperado …-fp16…)
+T-I7T  AVISO   captured_at recente (A8 abre a cancela)    sem leituras para conferir
+T-C1   FALHOU  contrato ods.i7.plate_read (validador do I7) nenhuma mensagem para conferir (-)
+
+Mensagens por tópico, todas as origens (antes → depois):
+  ods.i1.command                    466 →      466
+  ods.i7.plate_read                  26 →       26
+
+Resumo: PASSOU 1, FALHOU 3, AVISO 1

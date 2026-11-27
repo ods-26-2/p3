@@ -16,8 +16,9 @@ da nuvem e aciona a cancela quando a leitura obedece a três condições:
 - `captured_at` é recente;
 - a confiança é de pelo menos 0,9.
 
-Esta build deixa o I7 de pé na placa. Ele lê o `VER5.mp4` da SIS-2 em laço, como se fosse a câmera da
-entrada, e publica no Kafka da nuvem.
+Esta build deixa o I7 de pé na placa. Ele lê o `cam0.mp4` (vídeo do estacionamento da VER-5) em laço,
+como se fosse a câmera da entrada, e publica no Kafka da nuvem. A câmera real do P4 não funciona na
+placa (27/11/2026).
 
 ## 2. O que cada inferência entrega ao A8
 
@@ -52,8 +53,10 @@ alterar o código do I7.
   - a imagem é a mesma da build `inf` (`ods-i7-gpu:1441bbb…`, mesma receita): se já existe na placa,
     nada é construído;
   - a engine é a `app-plates-1.0.0` do I1, que a `inf_a4` compila em `/var/lib/ods/engines`.
-- **Vídeo:** fica em `/home/sys2/SIS-2/videos/VER5.mp4`, montado só para leitura e sem criar a pasta
-  (regra do sys2).
+- **Vídeo:** é o `/var/lib/ods/videos/cam0.mp4`, a pasta de vídeos do P3, montado só para leitura e
+  sem criar a pasta. **Não use o `VER5.mp4` da SIS-2 no I7.** No 1º teste na placa (27/11) o I7
+  detectou as placas, mas elas não são brasileiras (ex.: `34A36837`): todas saíram "Inválida" e
+  nenhuma foi publicada. O VER5.mp4 serve ao I1 (`./inf_a8.sh i1`).
 
 ## 4. Subir e testar
 
@@ -80,7 +83,7 @@ cd inf_a8
 | Item | Esperado | O que confere |
 |---|---|---|
 | T-I7C | PASSOU | O container está `running`, sem reinício nem `OUT_OF_MEMORY` durante o teste |
-| T-I7 | PASSOU | Leituras novas em `ods.i7.plate_read` com `source_id` `cam-entrada`. Espera até `I7_TESTE_ESPERA_S`, 300 s: no ritmo do vídeo, os carros só passam em certos trechos |
+| T-I7 | PASSOU | Leituras novas em `ods.i7.plate_read` com `source_id` `cam-entrada`. Espera até `I7_TESTE_ESPERA_S`, 420 s: no ritmo do vídeo, os carros só passam em certos trechos |
 | T-I7G | PASSOU | O `artifact_version` contém `-fp16` (detector no TensorRT). Em CPU seria `-fp32` |
 | T-I7T | PASSOU | Captura → publicação em até 120 s (a cancela do A8 recusa evento antigo) |
 | T-C1 | PASSOU | O contrato, conferido com o `validar_evento` do próprio I7, dentro da imagem dele |

@@ -414,3 +414,31 @@
   - Sem docker compose no notebook.
 - Comprimidos na placa: nenhum script grava (grep em builds/ e validacao/). Os de guardar/subir passam pelo ssh. Na placa só ficam ~/build-<app>.log, que cresce com tee -a, e o cache de build.
 - Próximo: commit (aguarda o usuário); na placa: git pull, ./ods.sh trocar inf_a8, ./inf_a8.sh testar.
+
+### 2026-11-27 — inf_a8 de pé na placa
+- O usuário informou que a build inf_a8 está rodando. Pendente: guardar no notebook (guardar-no-notebook.sh, roda no notebook) e trazer o ./inf_a8.sh testar.
+- Pedido novo: ver qual outra aplicação pode receber uma build de inferência.
+- Análise: tópicos consumidos no HEAD de cada app:
+  - A1 5e0f07e: ods.i8.piece_analysis + industria.defeito_classificado, P7, S4, S5; deploy na GCP;
+  - A2 72cedda: ods.i6.code_read + S4; broker da nuvem no liberar.py; catracas.json cam0→catraca-01; QR = AES (A2_AES_KEY, padrão 'a'*32) com CPF e janela start<=agora<=end; a geração está em utils/payload.py e web-app/backend/services/payload.py;
+  - A3 dev 683ce00 e A5 c634433: só S1/S2/S3/S4;
+  - A6/A7: I4/I5, fora.
+- I8 main 051851f: replay.py lê quadros e detecções de arquivo e faz inferência real (models/*csv-001.json, P2 CPU); sem consumidor ao vivo de ods.i1.detections.
+- Recomendação: A2 primeiro. Depende de um QR válido no vídeo: gerar com o código do próprio A2 ou pedir um à VER-2 (decisão do usuário).
+
+### 2026-11-27 — 1º testar da inf_a8 na placa
+- PASSOU 1 (T-I7C), FALHOU 3 (T-I7, T-I7G, T-C1), AVISO 1. Nenhuma ods.i7.plate_read em 300 s; o tópico ficou em 26 (igual ao fim da inf); 1 volta; memória 3,7→3,9 GB.
+- Hipóteses: VER5.mp4 longo, com carros depois dos 5 min no ritmo real; leituras abaixo de 0,9 (baixa_confianca) ou repetidas, que não são publicadas; ritmo quebrado; vídeo sem placa legível (a inf usava o cam0.mp4).
+- Teste ajustado: o T-I7G lê a artifact_version do log quando não há mensagem; o relatório lista o progresso do I7 sem leitura.
+- Evidência copiada para validacao/inf_a8/evidencias/. Próximo: pedir ao usuário o log do I7 e o resultados.csv.
+
+### 2026-11-27 — causa: VER5.mp4 sem placas brasileiras
+- Log: 18000 quadros a 60 q/s (300 s), 2 voltas completas, artifact_version app-plates-1.0.0-fp16+cct-s-v2-global. O I7 detecta placas, mas todas saem "Inválida"/"Sem Leitura" (34A36837, BM1111, VW939J…: parecem turcas) e nenhuma é publicada.
+- O ritmo do vídeo e a GPU estão OK. O vídeo serve ao I1 (detecção), não ao I7 (formato BR).
+- Proposta: I7_VIDEO_DIR=/var/lib/ods/videos e I7_VIDEO=cam0.mp4 (vídeo da VER-5, 4 placas em 20 quadros na inf). Teste no inf_a8.local.env antes de mudar o .env. Aguarda o usuário.
+- inf_a8.env: I7_TESTE_ESPERA_S passou de 300 para 420 (uma volta + pausa + folga).
+
+### 2026-11-27 — cam0.mp4 como padrão da inf_a8
+- O usuário mostrou que a pasta da SIS-2 só tem INV1/INV2/VER2/VER2_2/VER5 e que a câmera real do P4 não funciona.
+- inf_a8.env: I7_VIDEO_DIR=/var/lib/ods/videos, I7_VIDEO=cam0.mp4. Comentários, guia, README e CLAUDE.md ajustados. Sem commit.
+- Na placa: testar antes pelo inf_a8.local.env, ou fazer commit + git pull.

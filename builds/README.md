@@ -70,7 +70,7 @@ notebook, por ssh): `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]
 
 | Build | Sobe por padrão | Sob demanda | Testes | Guia |
 |---|---|---|---|---|
-| `inf_a8/` | `i7` **contínuo** (GPU), `VER5.mp4` da SIS-2 em laço, no ritmo do vídeo, `source_id` `cam-entrada` | `./inf_a8.sh i1 [QUADROS]` (VER5, pelo I1 da `inf_a4`) | `./inf_a8.sh testar` (leituras novas, GPU, `captured_at` recente e contrato com o validador do I7) | [`validacao/inf_a8/GUIA-BUILD-INF-A8.md`](../validacao/inf_a8/GUIA-BUILD-INF-A8.md) |
+| `inf_a8/` | `i7` **contínuo** (GPU), `cam0.mp4` (VER-5) em laço, no ritmo do vídeo, `source_id` `cam-entrada` | `./inf_a8.sh i1 [QUADROS]` (VER5, pelo I1 da `inf_a4`) | `./inf_a8.sh testar` (leituras novas, GPU, `captured_at` recente e contrato com o validador do I7) | [`validacao/inf_a8/GUIA-BUILD-INF-A8.md`](../validacao/inf_a8/GUIA-BUILD-INF-A8.md) |
 
 Kafka **da nuvem**, onde o A8 (VER-5) consome `ods.i7.plate_read`. Mesma imagem do I7 da `inf/`
 (`ods-i7-gpu:<I7_REF>`) e a engine `app-plates` da `inf_a4`. Convive com a `inf_a4` no `./ods.sh trocar`.

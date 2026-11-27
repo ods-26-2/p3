@@ -187,7 +187,7 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 ### Build "inf_a8": I7 contínuo para o A8 da nuvem (27/11/2026; ainda não rodada na Jetson)
 
 - **Projeto e serviço:** `builds/inf_a8/` (projeto `ods-inf_a8`) sobe só o `i7` contínuo. A imagem `ods-i7-gpu:1441bbb` é a mesma da `inf`, com a mesma receita. A engine `app-plates-1.0.0` é a da `inf_a4`.
-- **Entrada:** lê `VER5.mp4` da pasta da SIS-2 (`/home/sys2/SIS-2/videos`, só leitura, `create_host_path: false`) em laço, com pausa de `I7_PAUSA_S`. O laço está no comando do compose: se o I7 falhar, o container sai e o Docker reinicia.
+- **Entrada:** lê o `cam0.mp4` de `/var/lib/ods/videos` (só leitura, `create_host_path: false`) em laço. Não usa o `VER5.mp4` da SIS-2: as placas dele não são brasileiras, e o I7 descartou todas como "Inválida" na placa em 27/11. A câmera real do P4 não funciona. Segue com pausa de `I7_PAUSA_S`. O laço está no comando do compose: se o I7 falhar, o container sai e o Docker reinicia.
 - **Ritmo:** com `I7_TEMPO_REAL=sim`, o `i7_continuo.py` (do P3) faz o I7 ler no ritmo do vídeo. Ele troca o `cv2.VideoCapture` e roda o script do I7 por `runpy`, sem editar o código.
 - **Saída:** `source_id` `cam-entrada` (a cancela do A8 só aceita `cam-entrada` e `cam-saida`), no Kafka da nuvem.
 - **Por que só o I7:** o A8 (`develop` `f50b5a4`) consome só `ods.i7.plate_read`.

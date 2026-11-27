@@ -21,7 +21,7 @@
 #         --p4; aqui o vídeo faz o papel da câmera).
 #
 # Tópicos (no Kafka da build):
-#   i7  (VER5.mp4 em laço) -> ods.i7.plate_read
+#   i7  (cam0.mp4 em laço) -> ods.i7.plate_read
 name: ods-inf_a8
 
 x-log: &log
@@ -118,7 +118,7 @@ services:
       KAFKA_TOPICO: ods.i7.plate_read
       SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
     volumes:
-      # Pasta da SIS-2 (outro grupo): só leitura, e sem criar a pasta se ela faltar (o up falha)
+      # Pasta de vídeos (a do P3, VIDEO_DIR): só leitura, e sem criar a pasta se ela faltar (o up falha)
       - type: bind
         source: ${I7_VIDEO_DIR:?defina I7_VIDEO_DIR}
         target: /videos

@@ -68,7 +68,7 @@ checar_kafka_local() {
   Avise o grupo dono; para religar: docker start $c"; fi
 }
 
-# A pasta da SIS-2 (usuário sys2) pode não ser legível pelo usuário ods; o Docker (root) a monta.
+# A pasta pode não ser legível pelo usuário ods (ex.: a da SIS-2); o Docker (root) a monta.
 # Lista pelo próprio Docker, só leitura, na imagem do Kafka que já está na placa.
 listar_videos() {
   # --mount (e não -v): se a pasta não existir, falha em vez de criá-la como root
@@ -79,7 +79,7 @@ listar_videos() {
 checar_video() {
   local lista
   lista=$(listar_videos) || true
-  [[ -n "$lista" ]] || erro "pasta $I7_VIDEO_DIR vazia ou ausente (é da SIS-2: não a criamos)"
+  [[ -n "$lista" ]] || erro "pasta $I7_VIDEO_DIR vazia ou ausente (a build não a cria; os vídeos do P3 vêm do ../i1/i1.sh videos)"
   grep -qx "$I7_VIDEO" <<<"$lista" \
     || erro "falta $I7_VIDEO em $I7_VIDEO_DIR (há: $(tr '\n' ' ' <<<"$lista")). Troque I7_VIDEO no inf_a8.local.env."
   ok "vídeo do I7: $I7_VIDEO_DIR/$I7_VIDEO (só leitura)"
@@ -243,9 +243,15 @@ testar() {
   if (( n > 0 && ${t:-0} > 0 )); then registrar T-I7 PASSOU "I7 leituras ($I7_SOURCE_ID)" "$t de $n mensagens novas: $(cut -c1-80 <<<"$lidas")"
   elif (( n > 0 )); then registrar T-I7 FALHOU "I7 leituras ($I7_SOURCE_ID)" "$n mensagens novas, nenhuma com source_id $I7_SOURCE_ID"
   else registrar T-I7 FALHOU "I7 leituras ($I7_SOURCE_ID)" "nenhuma em ${I7_TESTE_ESPERA_S}s (./inf_a8.sh log)"; fi
+  # Sem leituras, a versão vem da linha "Publicação: … artifact_version=…" que o I7 escreve ao abrir
+  local origem_versao="das mensagens"
+  if [[ -z "$versoes" || "$versoes" == - ]]; then
+    versoes=$(grep -o 'artifact_version=[^ |]*' "$pasta/i7.log" | tail -1 | cut -d= -f2 || true)
+    origem_versao="do log do I7"
+  fi
   if [[ -n "$versoes" && "$versoes" != - && "$versoes" != *,* && "$versoes" == *-fp16* ]]; then
-    registrar T-I7G PASSOU "I7 na GPU (TensorRT)" "artifact_version $versoes"
-  else registrar T-I7G FALHOU "I7 na GPU (TensorRT)" "artifact_version '${versoes:-?}' (esperado …-fp16…)"; fi
+    registrar T-I7G PASSOU "I7 na GPU (TensorRT)" "artifact_version $versoes ($origem_versao)"
+  else registrar T-I7G FALHOU "I7 na GPU (TensorRT)" "artifact_version '${versoes:-?}' $origem_versao (esperado …-fp16…)"; fi
   if (( ${t:-0} == 0 )); then registrar T-I7T AVISO "captured_at recente (A8 abre a cancela)" "sem leituras para conferir"
   elif (( ${velhas:-0} == 0 )); then registrar T-I7T PASSOU "captured_at recente (A8 abre a cancela)" "maior atraso captura→publicação ${idade} s (máximo ${I7_TESTE_IDADE_MAX_S} s)"
   else registrar T-I7T FALHOU "captured_at recente (A8 abre a cancela)" "$velhas leitura(s) com mais de ${I7_TESTE_IDADE_MAX_S} s"; fi
@@ -267,6 +273,11 @@ testar() {
       IFS='|' read -r id r oque det <<<"$linha"
       printf '%-6s %-7s %-42s %s\n' "$id" "$r" "$oque" "$det"
     done
+    if (( n == 0 )); then
+      echo
+      echo "Sem leituras novas. Últimas linhas do I7 (progresso no vídeo, placas e motivos de não publicar):"
+      grep -E '^\[P3\]|quadros a |quadros processados|^\[ *[0-9.]+ s \| quadro|Não foi possível|ERRO|Traceback' "$pasta/i7.log" | tail -12 | sed 's/^/  /'
+    fi
     echo
     echo "Mensagens por tópico, todas as origens (antes → depois):"
     join -a1 -a2 -e 0 -o 0,1.2,2.2 <(somar "$ANTES") <(somar "$DEPOIS") | awk '{ printf "  %-28s %8s → %8s\n", $1, $2, $3 }'
