@@ -66,6 +66,16 @@ reconstrói. Recusa subir se o I1 permanente estiver de pé no mesmo broker.
 Chamava-se `inf_restrita` até 26/11/2026. Guardar no notebook e subir de lá sem reconstruir (rodam no
 notebook, por ssh): `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]` (guia, seção 4.1).
 
+## Build inf_a8: I7 contínuo para o A8 da nuvem
+
+| Build | Sobe por padrão | Sob demanda | Testes | Guia |
+|---|---|---|---|---|
+| `inf_a8/` | `i7` **contínuo** (GPU), `VER5.mp4` da SIS-2 em laço, no ritmo do vídeo, `source_id` `cam-entrada` | `./inf_a8.sh i1 [QUADROS]` (VER5, pelo I1 da `inf_a4`) | `./inf_a8.sh testar` (leituras novas, GPU, `captured_at` recente e contrato com o validador do I7) | [`validacao/inf_a8/GUIA-BUILD-INF-A8.md`](../validacao/inf_a8/GUIA-BUILD-INF-A8.md) |
+
+Kafka **da nuvem**, onde o A8 (VER-5) consome `ods.i7.plate_read`. Mesma imagem do I7 da `inf/`
+(`ods-i7-gpu:<I7_REF>`) e a engine `app-plates` da `inf_a4`. Convive com a `inf_a4` no `./ods.sh trocar`.
+Guardar no notebook e subir de lá: `./guardar-no-notebook.sh` e `./subir-do-notebook.sh [pasta]` (guia, seção 5).
+
 ## Estrutura comum
 
 - `comum/lib.sh`: funções de subir/status/parar/limpar usadas pelos `<app>.sh` e `limpar.sh`.

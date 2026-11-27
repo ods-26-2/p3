@@ -29,6 +29,7 @@ cada pedido** (o mais novo em cima em cada seção).
 |---|---|---|---|---|
 | `inf_a4` (era `inf_restrita`) | I1 próprio (GPU) + I2; I3 sob demanda | nuvem | De pé | 25/11: `testar` PASSOU 10/0/0 (nuvem). 27/11: `./inf_a4.sh p4` (P4 da SIS-2 → I1): 150 detecções e 150 trilhas, relatório `.txt` não conferido |
 | `i1` (permanente) | orquestrador do I1 | nuvem | **Fica parado** (decisão de 27/11: a `inf` usa o I1 da `inf_a4`) | 24/11: `testar` PASSOU 16, AVISO 1 |
+| `inf_a8` | I7 **contínuo** (VER5.mp4 em laço, no ritmo do vídeo, `cam-entrada`) para o A8 da nuvem; I1 VER5 sob demanda pela `inf_a4` | nuvem | **Nova em 27/11, não rodada na placa** | — (só simulação) |
 | `inf` | I3, I6, I7, I8, I9 **sobre a `inf_a4`** (usa o I1 e o I2 dela desde 27/11); **I4 e I5 fora** | nuvem | De pé (sobre a `inf_a4`) | **27/11 (nuvem): `testar` PASSOU 8, FALHOU 0, AVISO 2** (I4, I5 fora) |
 | `a8` | A8 + cadeia P4 → I1 → I2 → S1 → S4/S5 + I7 | placa | Referência | 14/11: PASSOU 11, FALHOU 2 (esperados). Imagens guardadas no PC em 25/11 |
 | `a5` | A5 + P4 → I1 (EPI) → I9/I2 → S1, S3, S4 | placa | Validada com falhas conhecidas | 18/11: PASSOU 9, FALHOU 2, BLOQUEADO 1, AVISO 1 |
@@ -42,6 +43,9 @@ cada pedido** (o mais novo em cima em cada seção).
 
 | Data | Pedido | Resultado |
 |---|---|---|
+| 27/11 | Criar a `inf_a8`: I7 contínuo com o VER5.mp4 e Kafka da nuvem; ver como as outras inferências atendem melhor o A8; script para guardar no notebook; os scripts deixam arquivos comprimidos na placa? | `builds/inf_a8` (I7 contínuo em laço, no ritmo do vídeo, `cam-entrada`; I1 VER5 sob demanda pela `inf_a4`; I2/I3/I6 fora); `guardar-no-notebook.sh` e `subir-do-notebook.sh`; `ods.sh`: `inf_a4` e `inf_a8` convivem. Validado só em simulação. Nenhum script grava arquivo comprimido na placa: tudo passa pelo ssh |
+| 27/11 | O que deixaria o I7 contínuo? O P3 pode fazer? | Sim, só com compose, sem mexer no código do I7 `1441bbb`. Ele já tem `--p4 video\|imx519\|imx477`, que roda até ficar `P4_ESPERA_S` sem quadros e reconecta sozinho, e `--video`, que termina no fim do arquivo. Contínuo = `--p4` sem `-n`, com `P4_ESPERA_S` alto e `restart: unless-stopped`, `ipc: host` e o `/tmp` da placa; ou vídeo em laço pelo restart. Fica fora do P3: o P4 da SIS-2 ligado o tempo todo e a câmera |
+| 27/11 | Qual aplicação está mais perto de uma build completa? O A8 antigo ainda funciona? | Indicado o **A4**: a INV-1 integrou com o I1 da Jetson (24–26/11), tem Dockerfiles, roda na nuvem e a `inf_a4` já passou 10/10; falta o ponta a ponta real, o S4 e o P4 como câmera; o P7 está bloqueado. **A8 na placa:** deve funcionar como em 14/11 (mesmos caminhos do I1, o código do A8 só mudou o broker), mas reconstrói ~8 imagens (~2 h), pesa no disco e o `trocar a8` derruba a `inf_a4`, deixando o A4 da nuvem sem I1. A homologação do A8 hoje é na nuvem e só precisa do I7 da placa publicando lá |
 | 27/11 | Garantir I4 e I5 fora da `inf`; script para guardar a `inf` no notebook, como o da `inf_a4` | `I4_REF`/`I5_REF` e variáveis comentados no `inf.env` (não clona mais); guia sem I4 ativo; `builds/inf/guardar-no-notebook.sh` (imagens I3, I6, I7, I8, I9; `--com-engine`, `--comprimir-na-placa`), validado só em simulação |
 | 27/11 | Trouxe o `testar` da `inf` no arranjo novo (e antes o `git pull` barrado por edições à mão) | PASSOU 8, FALHOU 0, AVISO 2; evidência versionada. Edições à mão na placa (I5 `4d79472` religado) guardadas em `git stash` |
 | 27/11 | Confirmar se a `inf` sobe tudo o que os I's precisam (sem I4/I5) | Sim: I1/I2 e engines pela `inf_a4`; I3, I6, I7, I8, I9 pela `inf`; P4 não entra (vídeo de arquivo) |
@@ -215,6 +219,7 @@ Commits fixados na `inf` × ponta atual de cada repositório:
 
 ## 8. Histórico deste arquivo
 
+- **27/11/2026:** build `inf_a8` (I7 contínuo para o A8).
 - **27/11/2026:** I4/I5 fora também do `inf.env`; `inf/guardar-no-notebook.sh`.
 - **27/11/2026:** `inf` validada na placa no arranjo novo (PASSOU 8/0/2).
 - **27/11/2026:** I4 fora da build `inf`; tudo de 27/11 commitado ("inf: roda sobre a inf_a4…").

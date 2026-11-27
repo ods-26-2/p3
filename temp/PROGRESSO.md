@@ -382,3 +382,35 @@
 - builds/inf/guardar-no-notebook.sh: molde do inf_a4. Imagens ods-i3/i6/i7-gpu/i8-publisher/i9; --com-engine (app-plates-1.0.0); --comprimir-na-placa. Confere I3–I9_REF da placa. Volta: zstd -dc | ssh docker load (sem script de subir).
 - Simulação (ssh e docker falsos): passa com e sem engine, SHA256SUMS ok, erro claro sem o inf.env na placa. bash -n ok; shellcheck e docker compose ausentes no notebook.
 - Guia da inf (§1–3 sem o I4 ativo, novo §7) e builds/README.md atualizados.
+
+### 2026-11-27 — análise: melhor app para build completa e A8 antigo
+- Commits mais novos, por git ls-remote:
+  - apps: A1 5e0f07e, A2 72cedda, A3 2c22c5c (dev 683ce00), A4 c280dea (+8 desde o 9d6cbd4: pede o I1 por ods.i1.command, relógio pelo quadro, Dockerfiles, compose.nuvem.yml), A5 c634433 (igual), A6 5ad584c, A7 0cbb34b, A8 main 2fe94db / develop f50b5a4 (só broker e documentação: nuvem como padrão; a8 "homologação": I7 da Jetson publica na nuvem);
+  - serviços: S1 ae566e0, S4 298e3de, S5 1e79ff0.
+- I1 cb5c381→3b2a9cc: só orquestrador, HOW_TO_RUN e compose. run_detector, Dockerfile.jetson e artifacts iguais, então o A8 com 3b2a9cc deve se comportar como em 14/11.
+- Recomendação: A4. Riscos do A8 na placa: imagens apagadas no trocar inf (~2 h para reconstruir), disco, trocar a8 derruba a inf_a4, listeners do Kafka da placa a conferir.
+- Não deu para contar o Kafka da nuvem daqui (sem cliente e sem acesso ao docker no notebook); a porta 9093 respondeu.
+
+### 2026-11-27 — I7 contínuo: análise
+- I7 1441bbb, scripts/aplicacaoModelov5-fast+rodosol.py:
+  - --p4 lê o SHM P4R1 (fonte_p4.LeitorP4, que reconecta a cada leitura) até P4_ESPERA_S (padrão 30 s) sem quadros; sempre o quadro mais recente; sessão do P4.
+  - --video termina no fim; janela de repetição pelo tempo do vídeo.
+- Contínuo possível só pelo compose. Aguarda o usuário decidir onde (inf, nova inf_a8) e a fonte (P4 ou vídeo em laço).
+
+### 2026-11-27 — build inf_a8 (I7 contínuo para o A8)
+- Pedido: inf_a8 com I7 contínuo, VER5.mp4, Kafka da nuvem; analisar as outras inferências para o A8; script de guardar no notebook; perguntar se os scripts deixam comprimidos na placa.
+- Decisões:
+  - só o I7 contínuo, porque o A8 develop f50b5a4 consome só ods.i7.plate_read, com cancela por source_id cam-entrada/cam-saida e captured_at recente;
+  - I1 VER5 sob demanda pelo orquestrador da inf_a4, porque um contínuo bloquearia o A4;
+  - I2, I3 e I6 fora.
+- Arquivos (builds/inf_a8/): inf_a8.env, docker-compose.yml (receita do i7 igual à da inf, conferida com diff), i7_continuo.py (ritmo do vídeo por invólucro do cv2.VideoCapture + runpy; I7_SCRIPT só para a simulação), inf_a8.sh, limpar.sh, preparar-codigo.sh, inf_a8.local.env.exemplo, contrato/validar_i7.py (validar_evento do I7), guardar-no-notebook.sh, subir-do-notebook.sh.
+- Outros arquivos: ods.sh (NUVEM=(inf_a4 inf_a8), convivem_com; aviso quando uma app derruba as duas), validacao/inf_a8/GUIA-BUILD-INF-A8.md, builds/README.md, CLAUDE.md §5, journal.
+- Validação (só no notebook):
+  - bash -n e YAML;
+  - ritmo do i7_continuo.py com cv2 falso: quadros a 0,5 s como no vídeo, e sem ritmo com I7_TEMPO_REAL=nao;
+  - validar_i7.py com eventos do ConstrutorEventos do I7: recusa layout e placa inválidos e filtra o source_id;
+  - inf_a8.sh contra docker falso: subir, testar 5/0/0 e falha 1/3/1, i1 (com a recusa por outro broker), status, placas;
+  - ods.sh trocar inf_a8/inf_a4/inf mantém as duas; trocar a8 derruba as duas com aviso.
+  - Sem docker compose no notebook.
+- Comprimidos na placa: nenhum script grava (grep em builds/ e validacao/). Os de guardar/subir passam pelo ssh. Na placa só ficam ~/build-<app>.log, que cresce com tee -a, e o cache de build.
+- Próximo: commit (aguarda o usuário); na placa: git pull, ./ods.sh trocar inf_a8, ./inf_a8.sh testar.

@@ -1,0 +1,136 @@
+# ODS — build "inf_a8": I7 contínuo para o A8 da nuvem (P3 / SIS-1).
+#
+#   cd builds/inf_a8 && ./inf_a8.sh     (confere a placa, baixa o código, constrói o que falta, sobe)
+#
+# Variáveis em inf_a8.env (commit fixado, Kafka, vídeo). Sem segredos.
+#
+# Desenho (27/11/2026):
+#   - O A8 roda na NUVEM (VER-5) e consome só ods.i7.plate_read (develop f50b5a4: source_id
+#     cam-entrada/cam-saida, captured_at recente, confiança >= 0,9). Esta build publica no Kafka da
+#     NUVEM; o container "kafka" da turma na placa continua rodando (o inf_a8.sh confere, nunca o para).
+#   - Contínuo (sobe com "up"): i7, lendo I7_VIDEO em laço, como a câmera da entrada. Cada volta é
+#     um processo novo do I7 (as mesmas placas voltam a ser publicadas), com I7_PAUSA_S entre elas.
+#   - Sob demanda: nada aqui. O I1 (VER5, placas) é o da inf_a4 (./inf_a8.sh i1), não um I1 próprio:
+#     um segundo orquestrador disputaria a GPU, e uma sessão contínua no da inf_a4 deixaria o A4 sem I1.
+#   - Fora (o A8 não consome, ou não há dado para ele): I2 (vem com o I1 da inf_a4), I3 (zonas do A8
+#     em pixels, sem calibração do estacionamento), I6 (opcional na 6c; o A8 não lê QR).
+#
+# Dependências pela 6c (lidas nos repositórios em 27/11/2026):
+#   I7  ← P2 (wheel 0.2.0a1 [trt] na imagem do P3), B5/MOD-1 (pacote app-plates 1.0.0: o mesmo ONNX
+#         do I1, por isso a engine FP16 é a que a inf_a4 compila), P4 (opcional: o I7 lê o P4 com
+#         --p4; aqui o vídeo faz o papel da câmera).
+#
+# Tópicos (no Kafka da build):
+#   i7  (VER5.mp4 em laço) -> ods.i7.plate_read
+name: ods-inf_a8
+
+x-log: &log
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+
+  kafka-topicos:
+    # Cria, se ainda não existir, o tópico desta build no Kafka da build. Roda e termina.
+    image: confluentinc/cp-kafka:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        kafka-topics --bootstrap-server ${KAFKA_BROKER:?defina KAFKA_BROKER} --create --if-not-exists
+        --topic ods.i7.plate_read --partitions 1 --replication-factor 1
+
+  # ================================================================ I7 · placas (VER-5)
+  i7:
+    # A MESMA imagem da build inf (ods-i7-gpu:<I7_REF>, mesma receita abaixo): se já existe, não
+    # constrói. Detector na GPU (TensorRT pelo P2, engine app-plates-1.0.0 do I1); OCR em CPU.
+    #
+    # Contínuo pelo P3 (o I7 não tem modo laço): o comando toca o vídeo, espera I7_PAUSA_S e toca de
+    # novo. Se o I7 falhar (código ≠ 0), o laço sai com o mesmo código e o Docker reinicia o
+    # container (restart: unless-stopped; o RestartCount conta só as falhas).
+    # I7_TEMPO_REAL=sim: o i7_continuo.py (do P3) faz o I7 ler o vídeo no ritmo dele (sem mexer no
+    # código do I7). Desfazer: I7_TEMPO_REAL=nao no inf_a8.local.env.
+    # Saídas (CSV e mosaicos) em /saidas/<vídeo>: cada volta sobrescreve a anterior (não cresce).
+    build:
+      context: ${SRC_DIR}/i7
+      dockerfile_inline: |
+        ARG BASE_IMAGE
+        FROM $${BASE_IMAGE}
+        ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
+            CUDA_HOME=/usr/local/cuda PATH=/usr/local/cuda/bin:$${PATH} \
+            LD_LIBRARY_PATH=/usr/local/cuda/lib64:$${LD_LIBRARY_PATH} \
+            PYTHONPATH=/usr/lib/python3/dist-packages:/usr/lib/python3.10/dist-packages \
+            P2_BACKEND=trt P2_ENGINE_DIR=/opt/ods/engines
+        # GStreamer com Python (gi) só para o --p4 (leitura do socket do P4), como no I1
+        RUN apt-get update && apt-get install -y --no-install-recommends \
+                python3-pip libglib2.0-0 \
+                python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-bad \
+            && rm -rf /var/lib/apt/lists/*
+        # Python 3.10 da base: opencv 4.12+ exige numpy 2 (o P2 pede < 2) e o onnxruntime depois do
+        # 1.23.2 não tem roda cp310 aarch64. Fixados para o pip não procurar versão por tentativa.
+        RUN python3 -m pip install --upgrade pip && python3 -m pip install \
+                "numpy>=1.21.6,<2" "opencv-python-headless==4.11.0.86" "onnxruntime==1.23.2" \
+                "fast-alpr[onnx]==0.4.0" \
+                "python-dotenv>=1.0" "confluent-kafka>=2.3" "typing_extensions>=4.10" \
+                "p2[trt] @ https://github.com/ods-26-2/p2/releases/download/v0.2.0a1/p2-0.2.0a1-py3-none-any.whl"
+        WORKDIR /app
+        COPY scripts/ scripts/
+      args:
+        BASE_IMAGE: ${TRT_BASE_IMAGE:?defina TRT_BASE_IMAGE}
+    image: ods-i7-gpu:${I7_REF:?fixe o commit do i7}
+    restart: unless-stopped
+    <<: *log
+    runtime: nvidia
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        [ -f "/videos/$$I7_VIDEO" ] || { echo "[P3] falta /videos/$$I7_VIDEO (I7_VIDEO_DIR)"; exit 2; }
+        n=0
+        while :; do
+          n=$$((n + 1))
+          echo "[P3] volta $$n de $$I7_VIDEO (source_id $$SOURCE_ID, tempo real: $$I7_TEMPO_REAL)"
+          python3 -u /p3/i7_continuo.py --video "/videos/$$I7_VIDEO" || exit $$?
+          echo "[P3] fim da volta $$n; a próxima em $${I7_PAUSA_S}s"
+          sleep "$$I7_PAUSA_S"
+        done
+    environment:
+      I7_VIDEO: ${I7_VIDEO:?defina I7_VIDEO}
+      I7_TEMPO_REAL: ${I7_TEMPO_REAL:-sim}
+      I7_PAUSA_S: ${I7_PAUSA_S:-30}
+      VIDEO_QUADROS_POR_SEGUNDO: ${I7_QUADROS_POR_SEGUNDO:-2}
+      # Configuração da build inf (recomendada pela equipe no .env.example do I7)
+      DETECTOR: p2
+      P2_ENGINE_REF: app-plates-1.0.0
+      P2_BACKEND: trt
+      NMS_ENTRE_CLASSES: sim
+      OCR_MODELO: cct-s-v2-global-model
+      PREPROCESSAMENTO: sim
+      MARGEM_RECORTE_PCT: "0"
+      MARGEM_RECORTE_MERCOSUL_PCT: "10"
+      DOBRAR_2L: nao
+      PRE_ALTURA_ALVO: "160"
+      PRE_NITIDEZ: "0"
+      PRE_PROPORCAO: "2"
+      PASTA_SAIDA: /saidas
+      PUBLICACAO_MODO: kafka
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      KAFKA_TOPICO: ods.i7.plate_read
+      SOURCE_ID: ${I7_SOURCE_ID:-cam-entrada}
+    volumes:
+      # Pasta da SIS-2 (outro grupo): só leitura, e sem criar a pasta se ela faltar (o up falha)
+      - type: bind
+        source: ${I7_VIDEO_DIR:?defina I7_VIDEO_DIR}
+        target: /videos
+        read_only: true
+        bind: { create_host_path: false }
+      - ${ENGINES_DIR:?defina ENGINES_DIR}/app-plates-1.0.0:/opt/ods/engines/app-plates-1.0.0:ro
+      - ./i7_continuo.py:/p3/i7_continuo.py:ro
+      - i7-saidas:/saidas
+      - i7-cache:/root/.cache
+    depends_on:
+      kafka-topicos: { condition: service_completed_successfully }
+
+volumes:
+  i7-saidas:
+  i7-cache:

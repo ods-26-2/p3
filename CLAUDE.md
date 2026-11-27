@@ -184,6 +184,19 @@ O dono já mudou os listeners três vezes sem aviso. Se uma build parar de conec
 - **Guardar/restaurar pelo notebook** (26/11, rodam NO NOTEBOOK, por `ssh`, sem arquivo na placa): `builds/inf_a4/guardar-no-notebook.sh` (`docker save` das 3 imagens + engines do I1 → `~/ods-imagens/inf_a4-<data>/`) e `builds/inf_a4/subir-do-notebook.sh [pasta]` (confere commits e disco, `docker load`, engines, `./inf_a4.sh subir`). De fora do laboratório: `--comprimir-na-placa` / `--descomprimir-na-placa` (zstd ou gzip na placa, `nice 19`) e `JETSON=<endereço>`.
 - **Jetson 25/11, Kafka da nuvem:** `./inf_a4.sh testar` PASSOU 10/0/0 (antes da troca para a pasta original); do notebook, os 5 tópicos aparecem na nuvem.
 
+### Build "inf_a8": I7 contínuo para o A8 da nuvem (27/11/2026; ainda não rodada na Jetson)
+
+- **Projeto e serviço:** `builds/inf_a8/` (projeto `ods-inf_a8`) sobe só o `i7` contínuo. A imagem `ods-i7-gpu:1441bbb` é a mesma da `inf`, com a mesma receita. A engine `app-plates-1.0.0` é a da `inf_a4`.
+- **Entrada:** lê `VER5.mp4` da pasta da SIS-2 (`/home/sys2/SIS-2/videos`, só leitura, `create_host_path: false`) em laço, com pausa de `I7_PAUSA_S`. O laço está no comando do compose: se o I7 falhar, o container sai e o Docker reinicia.
+- **Ritmo:** com `I7_TEMPO_REAL=sim`, o `i7_continuo.py` (do P3) faz o I7 ler no ritmo do vídeo. Ele troca o `cv2.VideoCapture` e roda o script do I7 por `runpy`, sem editar o código.
+- **Saída:** `source_id` `cam-entrada` (a cancela do A8 só aceita `cam-entrada` e `cam-saida`), no Kafka da nuvem.
+- **Por que só o I7:** o A8 (`develop` `f50b5a4`) consome só `ods.i7.plate_read`.
+  - O I1 do VER5 fica sob demanda pelo orquestrador da `inf_a4` (`./inf_a8.sh i1`). Uma sessão contínua seguraria o orquestrador e deixaria o A4 sem I1.
+  - O I3 e o I6 ficam de fora, porque o A8 não os consome.
+- **Convivência:** `ods.sh` tem `NUVEM=(inf_a4 inf_a8)`. Trocar para uma delas, ou para a `inf`, mantém as duas; trocar para uma aplicação derruba as duas, com aviso.
+- **Testes:** `./inf_a8.sh testar` (T-I7C, T-I7, T-I7G, T-I7T, T-C1, com o `validar_evento` do I7 dentro da imagem). Guardar e subir pelo notebook com `guardar-no-notebook.sh` e `subir-do-notebook.sh`. Guia: `validacao/inf_a8/GUIA-BUILD-INF-A8.md`.
+- **Validação:** só simulada até agora (`docker` falso, `cv2` falso e eventos do publicador do I7).
+
 **Tags no p3:** `a8-minimo-v1` (A8 + I7). A cadeia foi validada em 12/11/2026; a tag `a8-cadeia-v1` foi proposta e precisa ser conferida com o usuário.
 
 ### Composição
